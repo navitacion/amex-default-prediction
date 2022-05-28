@@ -1,0 +1,107 @@
+import os, pickle
+import numpy as np
+import pandas as pd
+import wandb
+from sklearn.model_selection import StratifiedKFold
+
+class Trainer:
+    def __init__(self, model, cfg, id_col: str, tar_col: str, features, criterion):
+        self.model = model
+        self.cfg = cfg
+        self.id_col = id_col
+        self.tar_col = tar_col
+        self.features = features
+        self.cv = StratifiedKFold(n_splits=cfg.data.n_splits, shuffle=True, random_state=cfg.data.seed)
+        self.criterion = criterion
+
+
+    def _prepare_data(self, df):
+        """
+        prepare dataset for training
+        ---------------------------------------------
+        Parameter
+        df: dataframe
+            preprocessed data
+        mode: str
+            If training, 'mode' set 'fit', else 'mode' set 'predict'
+        ---------------------------------------------
+        Returns
+        X_train, y_train, X_test, train_id, test_id, features
+        """
+
+        if self.features is None:
+            self.features = [f for f in df.columns if f not in [self.id_col, self.tar_col]]
+
+
+        features = df[self.features].values
+        label = df[self.tar_col].values
+        ids = df[self.id_col].values
+
+
+        return features, label, ids
+
+    def _train_cv(self, features, label):
+        """
+        Train loop for Cross Validation
+        """
+        # init Model list
+        self.models = []
+        preds = np.zeros(len(label))
+        oof_label = np.zeros(len(label))
+
+        # Cross Validation Score
+        for i, (trn_idx, val_idx) in enumerate(self.cv.split(features, label)):
+            x_trn, y_trn = features[trn_idx], label[trn_idx]
+            x_val, y_val = features[val_idx], label[val_idx]
+
+            oof = self.model.train(x_trn, y_trn, x_val, y_val, feature_name=self.features)
+
+            # Score
+            score = self.criterion(y_val, oof)
+
+            # Logging
+            wandb.log({'Fold Score': score}, step=i+1)
+            print(f'Fold {i + 1}  Score: {score:.3f}')
+            preds[val_idx] = oof
+            oof_label[val_idx] = y_val
+            self.models.append(self.model)
+
+        # All Fold Score
+        oof_score = self.criterion(oof_label, preds)
+        wandb.log({'Score': oof_score})
+        print(f'All Score: {oof_score:.3f}')
+
+        return preds
+
+
+    def _train_end(self, ids, preds):
+        """
+        End of Train loop per crossvalidation fold
+        Logging and oof file
+        """
+        # Log params
+
+        oof = pd.DataFrame({
+            self.id_col: ids,
+            self.tar_col: preds
+        })
+
+        oof = oof.sort_values(by=self.id_col)
+
+        # Logging
+        sub_name = 'oof.csv'
+        oof.to_csv(os.path.join(self.cfg.data.asset_dir, sub_name), index=False)
+        wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
+
+        # Save Models
+        sub_name = 'models.pkl'
+        with open(os.path.join(self.cfg.data.asset_dir, sub_name), 'wb') as f:
+            pickle.dump(self.models, f)
+        wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
+
+
+    def fit(self, df):
+        features, label, ids = self._prepare_data(df)
+        preds = self._train_cv(features, label)
+        self._train_end(ids, preds)
+

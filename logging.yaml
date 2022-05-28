@@ -1,0 +1,18 @@
+version: 1
+formatters:
+  myformat:
+    format: '%(asctime)s - %(levelname)s - %(message)s'
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: myformat
+    stream: ext://sys.stdout
+loggers:
+  mylogger:
+    level: DEBUG
+    handlers: [ console ]
+    propagate: no
+root:
+  level: DEBUG
+  handlers: [ console ]

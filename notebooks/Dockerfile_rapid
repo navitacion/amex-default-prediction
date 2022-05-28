@@ -1,0 +1,22 @@
+FROM rapidsai/rapidsai:cuda11.4-base-ubuntu18.04-py3.8
+
+WORKDIR /workspace
+
+COPY .. ./
+
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+ENV PYTHONUNBUFFERED=1
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt update && apt -y upgrade && apt install -y \
+  build-essential \
+  cmake \
+  git \
+  libboost-dev \
+  libboost-system-dev \
+  libboost-filesystem-dev
+
+RUN pip install poetry
+RUN poetry config virtualenvs.create false && poetry install
+
+CMD bash

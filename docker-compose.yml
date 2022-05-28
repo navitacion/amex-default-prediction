@@ -1,0 +1,26 @@
+version: '3'
+services:
+  env:
+    build: ./
+    container_name: amex_env
+    user: root
+    shm_size: 28gb
+    # Use GPU
+    # ref: https://qiita.com/gonzou122/items/7b5e74d7c4c5f3e969af
+    deploy:
+      resources:
+        limits:
+          cpus: "12"
+        reservations:
+          devices:
+            - 'driver': 'nvidia'
+              'capabilities': [ 'gpu' ]
+    volumes:
+      - type: bind
+        source: "./"
+        target: "/workspace"
+    working_dir: /workspace
+    tty: true
+    ports:
+      - "8888:8888"
+    command: jupyter lab --ip=0.0.0.0 --allow-root --NotebookApp.token='' --port=8888
