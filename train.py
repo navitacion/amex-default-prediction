@@ -32,8 +32,8 @@ def main(cfg):
     load_dotenv('.env')
     wandb.login(key=os.environ['WANDB_KEY'])
     wandb.init(project="amex-default-prediction")
-    wandb.config(dict(cfg.data))
-    wandb.config(dict(cfg.lgb))
+    wandb.log(dict(cfg.data))
+    wandb.log(dict(cfg.lgb))
 
     with open('logging.yaml', 'r') as yml:
         logger_cfg = yaml.safe_load(yml)

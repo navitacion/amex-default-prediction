@@ -87,7 +87,7 @@ class InferenceScoring:
 
         res = pd.DataFrame({
             'customer_ID': ids,
-            'target': preds
+            'prediction': preds
         })
 
         # Save to wandb
