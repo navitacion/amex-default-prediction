@@ -1,32 +1,20 @@
 import gc
 from pathlib import Path
 import pickle
-import yaml
 import pandas as pd
 from tqdm import tqdm
-from logging import getLogger, config
 
-from .utils import reduce_mem_usage
-from .features.tmp import tmp_features
+from src.features.tmp import tmp_features
+
 
 class DataAsset:
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, logger):
         self.cfg = cfg
         self.data_dir = Path(self.cfg.data.data_dir)
+        self.logger = logger
 
-        with open('logging.yaml', 'r') as yml:
-            logger_cfg = yaml.safe_load(yml)
-
-        # 定義ファイルを使ったloggingの設定
-        config.dictConfig(logger_cfg)
-
-        # ロガーの取得
-        self.logger = getLogger("Data Asset Logger")
-
-
-    def _extract_train_data_from_specific_id(
-            self, customer_ids: list, reduce_mem: bool = False):
+    def _extract_train_data_from_specific_id(self, customer_ids: list):
 
         features = pd.DataFrame()
         feature_types = ['D', 'S', 'P', 'B', 'R']
@@ -38,8 +26,6 @@ class DataAsset:
                 _features = pickle.load(f)
 
             _features = _features[_features['customer_ID'].isin(customer_ids)]
-            if reduce_mem:
-                _features = reduce_mem_usage(_features)
 
             if i == 0:
                 features = _features
@@ -51,7 +37,6 @@ class DataAsset:
             gc.collect()
 
         return features
-
 
     def load_train_data(self):
         frac = self.cfg.data.sample_frac
@@ -89,15 +74,3 @@ class DataAsset:
         gc.collect()
 
         return df
-
-
-    def get_generator_loading_test(self, chunksize: int = 20000):
-
-        test = pd.read_csv(self.data_dir.joinpath('test_data.csv'), chunksize=chunksize)
-
-        return test
-
-
-
-
-

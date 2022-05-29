@@ -4,24 +4,32 @@ from tqdm import tqdm
 from pathlib import Path
 import pandas as pd
 
-def make_pickle(data_dir: str):
+from src.utils import reduce_mem_usage
+
+
+def make_pickle(data_dir: str, _type: str = 'train', reduce_mem: bool = True):
     data_dir = Path(data_dir)
 
     # make Pickle file per feature type
-    _df = pd.read_csv(data_dir.joinpath('train_data.csv'), nrows=2)
+    _df = pd.read_csv(data_dir.joinpath(f'{_type}_data.csv'), nrows=2)
 
     # S_2 looks like transaction date
     # PK: customer_ID + S_2
-    for s in tqdm(['D', 'S', 'P', 'B', 'R']):
+    for s in ['D', 'S', 'P', 'B', 'R']:
         use_cols = ['customer_ID', 'S_2'] + [c for c in _df.columns if c.startswith(s)]
         use_cols = list(set(use_cols))
 
-        train = pd.read_csv(data_dir.joinpath('train_data.csv'), chunksize=200000, usecols=use_cols)
+        train = pd.read_csv(data_dir.joinpath(f'{_type}_data.csv'), chunksize=200000, usecols=use_cols)
 
-        dfs = [df for df in train]
+        dfs = []
+        for tmp in train:
+            tmp = reduce_mem_usage(tmp) if reduce_mem else tmp
+            dfs.append(tmp)
+
+        # dfs = [df for df in train]
         dfs = pd.concat(dfs, axis=0, ignore_index=True)
 
-        output_path = data_dir.joinpath(f'train_data_{s}.pkl')
+        output_path = data_dir.joinpath(f'{_type}_data_{s}.pkl')
 
         with open(output_path, 'wb') as f:
             pickle.dump(dfs, f)
@@ -51,9 +59,10 @@ def make_test_label_pickle(data_dir: str):
     print(f'Unique customer_ID List (Test) saved as pickle')
 
 
-
 if __name__ == "__main__":
     data_dir = './input'
 
-    make_pickle(data_dir)
+    print('Preparing Dataset')
+    make_pickle(data_dir, _type='train', reduce_mem=True)
     make_test_label_pickle(data_dir)
+    make_pickle(data_dir, _type='test', reduce_mem=True)

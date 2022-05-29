@@ -1,12 +1,17 @@
 import os
+import pickle
+
+import yaml
 import shutil
 import wandb
 import hydra
 from dotenv import load_dotenv
+from logging import getLogger, config
 
 from src.data import DataAsset
-from src.models.base import LGBMModel
+from src.models.lgbm import LGBMModel
 from src.trainer import Trainer
+from src.inference import InferenceScoring
 from src.utils import amex_metric
 
 
@@ -27,11 +32,22 @@ def main(cfg):
     load_dotenv('.env')
     wandb.login(key=os.environ['WANDB_KEY'])
     wandb.init(project="amex-default-prediction")
+    wandb.config(dict(cfg.data))
+    wandb.config(dict(cfg.lgb))
+
+    with open('logging.yaml', 'r') as yml:
+        logger_cfg = yaml.safe_load(yml)
+
+    # 定義ファイルを使ったloggingの設定
+    config.dictConfig(logger_cfg)
+
+    # ロガーの取得
+    logger = getLogger("Amex-PD Logger")
 
     # Load Dataset  --------------------------------------------
-    dataasset = DataAsset(cfg)
+    asset = DataAsset(cfg, logger)
 
-    df = dataasset.load_train_data()
+    df = asset.load_train_data()
 
     # Model  ---------------------------------------------------
     model = LGBMModel(dict(cfg.lgb))
@@ -44,15 +60,11 @@ def main(cfg):
         criterion=amex_metric
     )
 
-    trainer.fit(df)
+    models = trainer.fit(df)
 
-    # Predict  -------------------------------------------------
-
-    # test = dataasset.get_generator_loading_test(chunksize=200)
-
-    # for t in test:
-    #     print(t.shape)
-    #     break
+    # Inference  -----------------------------------------------
+    inferences = InferenceScoring(cfg, models, logger)
+    inferences.run()
 
 
 if __name__ == "__main__":

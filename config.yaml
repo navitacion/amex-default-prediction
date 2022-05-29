@@ -26,3 +26,6 @@ lgb:
 
 train:
   exp_name: test
+
+inference:
+  chunksize: 10

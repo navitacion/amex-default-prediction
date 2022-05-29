@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+
 def reduce_mem_usage(df):
     """ iterate through all the columns of a dataframe and modify the data type
         to reduce memory usage.
@@ -26,13 +27,13 @@ def reduce_mem_usage(df):
                 else:
                     df[col] = df[col].astype(np.float64)
         else:
-            df[col] = df[col].astype('category')
+            df[col] = df[col]
 
     return df
 
+
 # Ref: https://www.kaggle.com/competitions/amex-default-prediction/discussion/327162
 def amex_metric(y_true: np.array, y_pred: np.array) -> float:
-
     # ndarray -> pd.DataFrame
     y_true = pd.DataFrame({
         'target': y_true
