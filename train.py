@@ -1,3 +1,4 @@
+import gc
 import os
 
 import yaml
@@ -63,6 +64,9 @@ def main(cfg):
     )
 
     models = trainer.fit(df)
+
+    del df, model
+    gc.collect()
 
     # Inference  -----------------------------------------------
     inferences = InferenceScoring(cfg, models, logger)
