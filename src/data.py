@@ -4,8 +4,6 @@ import pickle
 import pandas as pd
 from tqdm import tqdm
 
-from src.features.tmp import tmp_features
-
 
 class DataAsset:
 
@@ -57,20 +55,6 @@ class DataAsset:
         unique_customer_ids = label['customer_ID'].unique().tolist()
 
         # PK: customer_ID + 'S_2'
-        features = self._extract_train_data_from_specific_id(unique_customer_ids)
+        train = self._extract_train_data_from_specific_id(unique_customer_ids)
 
-        # TODO: このタイミングで特徴量計算をする
-        # PK: customer_ID + 'S_2' -> PK: customer_IDにする
-        features = tmp_features(features)
-
-        df = pd.merge(features, label, on=['customer_ID'], how='left')
-
-        self.logger.info(f'Loaded Train Data Shape: {df.shape}')
-
-        # Check unique customer_ID num
-        assert label.shape[0] == df['customer_ID'].nunique()
-
-        del features, label
-        gc.collect()
-
-        return df
+        return train, label

@@ -8,7 +8,7 @@ import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 
-from src.features.tmp import tmp_features
+from src.features.base import generate_features
 
 
 class InferenceScoring:
@@ -68,22 +68,25 @@ class InferenceScoring:
                 self._split_array(all_customer_id_test, n_group=self.cfg.inference.chunksize),
                 total=self.cfg.inference.chunksize):
 
-            features = self._extract_train_data_from_specific_id(target_ids)
+            org_features_df = self._extract_train_data_from_specific_id(target_ids)
 
-            # TODO: 特徴量生成
-            # PK: customer_ID + 'S_2' -> PK: customer_IDにする
-            features = tmp_features(features)
+            # Feature Extract  -----------------------------------------
+            df = generate_features(org_features_df)
 
-            # TODO: モデル推論
-            pred = np.zeros(len(features))
+            # Inference  -----------------------------------------
+            pred = np.zeros(len(df))
             for model in self.models:
-                pred += model.predict(features[model.features])
+                pred += model.predict(df[model.features])
 
             # Avg
             pred /= len(self.models)
 
             ids.extend(target_ids)
             preds.extend(pred)
+
+            # Memory Clear
+            del org_features_df, df, target_ids, pred
+            gc.collect()
 
         res = pd.DataFrame({
             'customer_ID': ids,
