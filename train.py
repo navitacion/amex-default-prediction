@@ -1,5 +1,4 @@
 import os
-import pickle
 
 import yaml
 import shutil
@@ -13,6 +12,7 @@ from src.models.lgbm import LGBMModel
 from src.trainer import Trainer
 from src.inference import InferenceScoring
 from src.utils import amex_metric
+from src.features.base import generate_features
 
 
 @hydra.main(config_path=".", config_name="config.yaml")
@@ -46,8 +46,10 @@ def main(cfg):
 
     # Load Dataset  --------------------------------------------
     asset = DataAsset(cfg, logger)
+    org_features_df, label = asset.load_train_data()
 
-    df = asset.load_train_data()
+    # Feature Extract  -----------------------------------------
+    df = generate_features(org_features_df, label)
 
     # Model  ---------------------------------------------------
     model = LGBMModel(dict(cfg.lgb))
