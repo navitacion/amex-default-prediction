@@ -50,7 +50,9 @@ def main(cfg):
     org_features_df, label = asset.load_train_data()
 
     # Feature Extract  -----------------------------------------
-    df = generate_features(org_features_df, label)
+    df, encoder = generate_features(org_features_df, label)
+    del org_features_df, label
+    gc.collect()
 
     # Model  ---------------------------------------------------
     model = LGBMModel(dict(cfg.lgb))
@@ -69,7 +71,7 @@ def main(cfg):
     gc.collect()
 
     # Inference  -----------------------------------------------
-    inferences = InferenceScoring(cfg, models, logger)
+    inferences = InferenceScoring(cfg, models, logger, encoder)
     inferences.run()
 
 
