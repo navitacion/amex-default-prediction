@@ -5,11 +5,13 @@ import yaml
 import shutil
 import wandb
 import hydra
+import numpy as np
 from dotenv import load_dotenv
 from logging import getLogger, config
 
 from src.data import DataAsset
 from src.models.lgbm import LGBMModel
+from src.models.catboost import CatBoostModel, CatBoostAmexMetric
 from src.trainer import Trainer
 from src.inference import InferenceScoring
 from src.utils import amex_metric
@@ -34,7 +36,6 @@ def main(cfg):
     wandb.login(key=os.environ['WANDB_KEY'])
     wandb.init(project="amex-default-prediction")
     wandb.log(dict(cfg.data))
-    wandb.log(dict(cfg.lgb))
 
     with open('logging.yaml', 'r') as yml:
         logger_cfg = yaml.safe_load(yml)
@@ -55,8 +56,11 @@ def main(cfg):
     gc.collect()
 
     # Model  ---------------------------------------------------
+    # LightGBM
+    wandb.log(dict(cfg.lgb))
     model = LGBMModel(dict(cfg.lgb))
 
+    # Training  -------------------------------------------------
     trainer = Trainer(
         model, cfg,
         id_col='customer_ID',

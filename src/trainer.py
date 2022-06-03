@@ -31,8 +31,10 @@ class Trainer:
         if self.features is None:
             self.features = [f for f in df.columns if f not in [self.id_col, self.tar_col]]
 
-        features = df[self.features].values
-        label = df[self.tar_col].values
+        # ndarray
+        # pd.DataFrame
+        features = df[self.features]
+        label = df[self.tar_col]
         ids = df[self.id_col].values
 
         return features, label, ids
@@ -48,8 +50,8 @@ class Trainer:
 
         # Cross Validation Score
         for i, (trn_idx, val_idx) in enumerate(self.cv.split(features, label)):
-            x_trn, y_trn = features[trn_idx], label[trn_idx]
-            x_val, y_val = features[val_idx], label[val_idx]
+            x_trn, y_trn = features.iloc[trn_idx], label.iloc[trn_idx]
+            x_val, y_val = features.iloc[val_idx], label.iloc[val_idx]
 
             oof = self.model.train(x_trn, y_trn, x_val, y_val, features=self.features)
 
@@ -97,6 +99,25 @@ class Trainer:
         with open(os.path.join(self.cfg.data.asset_dir, sub_name), 'wb') as f:
             pickle.dump(self.models, f)
         wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
+
+        # Feature Importances
+        try:
+            feat_imp = np.zeros(len(self.features))
+            for model in self.models:
+                feat_imp += model.get_feature_importance()
+
+            feat_imp /= len(self.models)
+
+            feat_imp_df = pd.DataFrame({
+                'feature': self.features,
+                'importance': feat_imp
+            })
+
+            sub_name = 'feature_importance.csv'
+            feat_imp_df.to_csv(os.path.join(self.cfg.data.asset_dir, sub_name), index=False)
+            wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
+        except:
+            pass
 
     def fit(self, df):
         features, label, ids = self._prepare_data(df)
