@@ -4,7 +4,7 @@ services:
     build: ./
     container_name: amex_env
     user: root
-    shm_size: 28gb
+    shm_size: 30gb
     # Use GPU
     # ref: https://qiita.com/gonzou122/items/7b5e74d7c4c5f3e969af
     deploy:

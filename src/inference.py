@@ -73,6 +73,9 @@ class InferenceScoring:
 
             # Feature Extract  -----------------------------------------
             df, _ = generate_features(org_features_df, encoder=self.encoder)
+            # Memory Clear
+            del org_features_df
+            gc.collect()
 
             # Inference  -----------------------------------------
             pred = np.zeros(len(df))
@@ -86,7 +89,7 @@ class InferenceScoring:
             preds.extend(pred)
 
             # Memory Clear
-            del org_features_df, df, target_ids, pred
+            del df, target_ids, pred
             gc.collect()
 
         res = pd.DataFrame({

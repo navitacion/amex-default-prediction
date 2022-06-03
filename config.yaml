@@ -28,4 +28,4 @@ train:
   exp_name: test
 
 inference:
-  chunksize: 30
+  chunksize: 60
