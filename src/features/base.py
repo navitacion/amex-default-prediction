@@ -3,7 +3,7 @@ import pandas as pd
 import category_encoders as ce
 
 from src.features.groupby import GroupbyIDTransformer
-from src.features.date import CountTransaction, TransactionDays
+from src.features.date import CountTransaction, TransactionDays, P2Increase
 from src.constant import CAT_FEATURES, DATE_FEATURES
 from src.utils import reduce_mem_usage
 
@@ -29,7 +29,8 @@ def generate_features(features_df, label=None, encoder=None):
     transformers = [
         GroupbyIDTransformer(cnt_features, aggs=['max', 'min', 'mean', 'std', 'last']),
         GroupbyIDTransformer(CAT_FEATURES, aggs=['count', 'last']),
-        TransactionDays(),
+        TransactionDays(aggs=['max', 'min', 'mean', 'std']),
+        P2Increase(aggs=['max', 'last']),
         CountTransaction(),
     ]
 

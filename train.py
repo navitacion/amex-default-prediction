@@ -5,13 +5,11 @@ import yaml
 import shutil
 import wandb
 import hydra
-import numpy as np
 from dotenv import load_dotenv
 from logging import getLogger, config
 
 from src.data import DataAsset
 from src.models.lgbm import LGBMModel
-from src.models.catboost import CatBoostModel, CatBoostAmexMetric
 from src.trainer import Trainer
 from src.inference import InferenceScoring
 from src.utils import amex_metric

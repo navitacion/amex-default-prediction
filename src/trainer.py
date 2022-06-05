@@ -33,8 +33,8 @@ class Trainer:
 
         # ndarray
         # pd.DataFrame
-        features = df[self.features]
-        label = df[self.tar_col]
+        features = df[self.features].values
+        label = df[self.tar_col].values
         ids = df[self.id_col].values
 
         return features, label, ids
@@ -50,8 +50,8 @@ class Trainer:
 
         # Cross Validation Score
         for i, (trn_idx, val_idx) in enumerate(self.cv.split(features, label)):
-            x_trn, y_trn = features.iloc[trn_idx], label.iloc[trn_idx]
-            x_val, y_val = features.iloc[val_idx], label.iloc[val_idx]
+            x_trn, y_trn = features[trn_idx], label[trn_idx]
+            x_val, y_val = features[val_idx], label[val_idx]
 
             oof = self.model.train(x_trn, y_trn, x_val, y_val, features=self.features)
 
@@ -59,8 +59,8 @@ class Trainer:
             score = self.criterion(y_val, oof)
 
             # Logging
-            wandb.log({'Fold Score': score}, step=i + 1)
-            print(f'Fold {i + 1}  Score: {score:.3f}')
+            wandb.log({'Fold Score': score}, step=i)
+            print(f'Fold {i}  Score: {score:.3f}')
             preds[val_idx] = oof
             oof_label[val_idx] = y_val
             self.models.append(self.model)
