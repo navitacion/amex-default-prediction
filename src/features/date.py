@@ -55,21 +55,20 @@ class P2Increase:
     def __call__(self, df):
         return self.transform(df)
 
-
 # TODO: 最新月からの急激な変化を検知したい
-class RecentDiff:
-    def __init__(self, recent_from_days: list):
-        self.recent_from_days = recent_from_days
-
-    def transform(self, df):
-        # customer_IDごとの最近のレコードを取ってくる
-        df['tmp'] = df.groupby('customer_ID')['P_2'].diff()
-        group = df.groupby('customer_ID')['tmp'].agg(self.aggs).reset_index()
-
-        rename_dict = {k: f"fe_p_2_diff_{k}" for k in self.aggs}
-        group = group.rename(columns=rename_dict)
-
-        return group
-
-    def __call__(self, df):
-        return self.transform(df)
+# class RecentDiff:
+#     def __init__(self, recent_from_days: list):
+#         self.recent_from_days = recent_from_days
+#
+#     def transform(self, df):
+#         # customer_IDごとの最近のレコードを取ってくる
+#         df['tmp'] = df.groupby('customer_ID')['P_2'].diff()
+#         group = df.groupby('customer_ID')['tmp'].agg(self.aggs).reset_index()
+#
+#         rename_dict = {k: f"fe_p_2_diff_{k}" for k in self.aggs}
+#         group = group.rename(columns=rename_dict)
+#
+#         return group
+#
+#     def __call__(self, df):
+#         return self.transform(df)
