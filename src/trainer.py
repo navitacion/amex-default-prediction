@@ -93,6 +93,10 @@ class Trainer:
         oof.to_csv(os.path.join(self.cfg.data.asset_dir, sub_name), index=False)
         wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
 
+        wandb.log({
+            'oof_pred': wandb.Table(dataframe=oof)
+        })
+
         # Save Models
         sub_name = 'models.pkl'
         with open(os.path.join(self.cfg.data.asset_dir, sub_name), 'wb') as f:
@@ -115,6 +119,11 @@ class Trainer:
             sub_name = 'feature_importance.csv'
             feat_imp_df.to_csv(os.path.join(self.cfg.data.asset_dir, sub_name), index=False)
             wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
+
+            wandb.log({
+                'feature_importance': wandb.Table(dataframe=feat_imp_df)
+            })
+
         except:
             pass
 

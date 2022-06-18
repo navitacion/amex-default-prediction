@@ -2,17 +2,11 @@ import gc
 import pandas as pd
 import category_encoders as ce
 
-from src.features.groupby import GroupbyIDTransformer
-from src.features.date import CountTransaction, TransactionDays, P2Increase
-from src.constant import CAT_FEATURES, DATE_FEATURES
+from src.constant import CAT_FEATURES
 from src.utils import reduce_mem_usage
 
 
-def generate_features(features_df, label=None, encoder=None):
-    cnt_features = [
-        f for f in features_df.columns if f not in CAT_FEATURES + DATE_FEATURES + ['customer_ID']
-    ]
-
+def generate_features(features_df, transformers, label=None, encoder=None):
     # Label Encoder
     if encoder is None:
         encoder = ce.OrdinalEncoder(cols=CAT_FEATURES, handle_unknown='impute')
@@ -25,14 +19,6 @@ def generate_features(features_df, label=None, encoder=None):
 
     # Sort ID, S_2
     features_df = features_df.sort_values(by=['customer_ID', 'S_2'])
-
-    transformers = [
-        GroupbyIDTransformer(cnt_features, aggs=['max', 'min', 'mean', 'std', 'last']),
-        GroupbyIDTransformer(CAT_FEATURES, aggs=['count', 'last']),
-        TransactionDays(aggs=['max', 'min', 'mean', 'std']),
-        P2Increase(aggs=['max', 'last']),
-        CountTransaction(),
-    ]
 
     df = pd.DataFrame()
 

@@ -14,6 +14,9 @@ from src.trainer import Trainer
 from src.inference import InferenceScoring
 from src.utils import amex_metric
 from src.features.base import generate_features
+from src.features.groupby import GroupbyIDTransformer
+from src.features.date import CountTransaction, TransactionDays, P2Increase
+from src.constant import CAT_FEATURES, DATE_FEATURES
 
 
 @hydra.main(config_path=".", config_name="config.yaml")
@@ -32,8 +35,9 @@ def main(cfg):
     # Logger  --------------------------------------------------
     load_dotenv('.env')
     wandb.login(key=os.environ['WANDB_KEY'])
-    wandb.init(project="amex-default-prediction")
-    wandb.log(dict(cfg.data))
+    wandb.init(project="amex-default-prediction", reinit=True)
+    wandb.config.update(dict(cfg.data))
+    wandb.config.update(dict(cfg.train))
 
     with open('logging.yaml', 'r') as yml:
         logger_cfg = yaml.safe_load(yml)
@@ -49,19 +53,30 @@ def main(cfg):
     org_features_df, label = asset.load_train_data()
 
     # Feature Extract  -----------------------------------------
-    df, encoder = generate_features(org_features_df, label)
+    cnt_features = [
+        f for f in org_features_df.columns if f not in CAT_FEATURES + DATE_FEATURES + ['customer_ID']
+    ]
+    transformers = [
+        GroupbyIDTransformer(cnt_features, aggs=['max', 'min', 'mean', 'std', 'last']),
+        GroupbyIDTransformer(CAT_FEATURES, aggs=['count', 'last']),
+        TransactionDays(aggs=['max', 'min', 'mean', 'std']),
+        P2Increase(aggs=['max', 'last']),
+        CountTransaction(),
+    ]
+
+    df, encoder = generate_features(org_features_df, transformers, label)
     del org_features_df, label
     gc.collect()
 
     # Model  ---------------------------------------------------
     # LightGBM
     if cfg.train.model_type == 'lgb':
-        wandb.log(dict(cfg.lgb))
+        wandb.config.update(dict(cfg.lgb))
         model = LGBMModel(dict(cfg.lgb))
 
     # CatBoost
     elif cfg.train.model_type == 'catboost':
-        wandb.log(dict(cfg.catboost))
+        wandb.config.update(dict(cfg.catboost))
         # Get Category
         cat_features = [
             c for c in df.select_dtypes(include=['object', 'category']).columns if c.startswith('fe_')
@@ -87,7 +102,7 @@ def main(cfg):
     gc.collect()
 
     # Inference  -----------------------------------------------
-    inferences = InferenceScoring(cfg, models, logger, encoder)
+    inferences = InferenceScoring(cfg, models, logger, transformers, encoder)
     inferences.run()
 
 

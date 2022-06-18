@@ -145,3 +145,4 @@ check.py
 weights/*
 .env
 catboost_info/*
+multirun/*
