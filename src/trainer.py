@@ -31,9 +31,8 @@ class Trainer:
         if self.features is None:
             self.features = [f for f in df.columns if f not in [self.id_col, self.tar_col]]
 
-        # ndarray
-        # pd.DataFrame
-        features = df[self.features].values
+        # Extract Features, label, Id
+        features = df[self.features]
         label = df[self.tar_col].values
         ids = df[self.id_col].values
 
@@ -50,8 +49,8 @@ class Trainer:
 
         # Cross Validation Score
         for i, (trn_idx, val_idx) in enumerate(self.cv.split(features, label)):
-            x_trn, y_trn = features[trn_idx], label[trn_idx]
-            x_val, y_val = features[val_idx], label[val_idx]
+            x_trn, y_trn = features.iloc[trn_idx], label[trn_idx]
+            x_val, y_val = features.iloc[val_idx], label[val_idx]
 
             oof = self.model.train(x_trn, y_trn, x_val, y_val, features=self.features)
 

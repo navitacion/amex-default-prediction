@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from logging import getLogger, config
 
 from src.data import DataAsset
-from src.models.lgbm import LGBMModel
+from src.models import LGBMModel, CBModel
 from src.trainer import Trainer
 from src.inference import InferenceScoring
 from src.utils import amex_metric
@@ -55,10 +55,24 @@ def main(cfg):
 
     # Model  ---------------------------------------------------
     # LightGBM
-    wandb.log(dict(cfg.lgb))
-    model = LGBMModel(dict(cfg.lgb))
+    if cfg.train.model_type == 'lgb':
+        wandb.log(dict(cfg.lgb))
+        model = LGBMModel(dict(cfg.lgb))
+
+    # CatBoost
+    elif cfg.train.model_type == 'catboost':
+        wandb.log(dict(cfg.catboost))
+        # Get Category
+        cat_features = [
+            c for c in df.select_dtypes(include=['object', 'category']).columns if c.startswith('fe_')
+        ]
+        model = CBModel(dict(cfg.catboost), cat_features)
+
+    else:
+        raise (TypeError)
 
     # Training  -------------------------------------------------
+    logger.info(f'Train {cfg.train.model_type} Model')
     trainer = Trainer(
         model, cfg,
         id_col='customer_ID',
