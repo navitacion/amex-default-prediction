@@ -1,6 +1,6 @@
 import gc
 import os
-
+import time
 import yaml
 import shutil
 import wandb
@@ -104,6 +104,12 @@ def main(cfg):
     # Inference  -----------------------------------------------
     inferences = InferenceScoring(cfg, models, logger, transformers, encoder)
     inferences.run()
+
+    wandb.finish()
+    time.sleep(3)
+
+    # Remove checkpoint folder
+    shutil.rmtree(cfg.data.asset_dir)
 
 
 if __name__ == "__main__":
