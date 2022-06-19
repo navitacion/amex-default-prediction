@@ -3,6 +3,9 @@ import pandas as pd
 
 class CountTransaction:
     def __init__(self):
+        """
+        customer_IDごとの取引回数
+        """
         pass
 
     def transform(self, df):
@@ -18,7 +21,10 @@ class CountTransaction:
 
 class TransactionDays:
     def __init__(self, aggs: list):
-        """customer_IDごとの取引日(S_2)のStats"""
+        """
+        customer_IDごとの取引日(S_2)の日数のStats
+        customer_IDごとに取引日の期間にフォーカスしたもの
+        """
         self.aggs = aggs
 
     def transform(self, df):
@@ -40,6 +46,9 @@ class TransactionDays:
 
 class P2Increase:
     def __init__(self, aggs):
+        """
+        P_2の直前の変化量
+        """
         self.aggs = aggs
 
     def transform(self, df):

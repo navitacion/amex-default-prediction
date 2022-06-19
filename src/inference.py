@@ -12,11 +12,12 @@ from src.features.base import generate_features
 
 
 class InferenceScoring:
-    def __init__(self, cfg, models: list, logger, encoder):
+    def __init__(self, cfg, models: list, logger, transformers, encoder):
         self.cfg = cfg
         self.models = models
         self.data_dir = Path(self.cfg.data.data_dir)
         self.logger = logger
+        self.transformers = transformers
         self.encoder = encoder
 
     def _get_generator_test_customer_id(self):
@@ -66,13 +67,13 @@ class InferenceScoring:
 
         # Split Test Data Each customer_ID
         for target_ids in tqdm(
-                self._split_array(all_customer_id_test, n_group=self.cfg.inference.chunksize),
-                total=self.cfg.inference.chunksize):
+                self._split_array(all_customer_id_test, n_group=self.cfg.inference.chunk_size),
+                total=self.cfg.inference.chunk_size):
 
             org_features_df = self._extract_train_data_from_specific_id(target_ids)
 
             # Feature Extract  -----------------------------------------
-            df, _ = generate_features(org_features_df, encoder=self.encoder)
+            df, _ = generate_features(org_features_df, self.transformers, encoder=self.encoder)
             # Memory Clear
             del org_features_df
             gc.collect()

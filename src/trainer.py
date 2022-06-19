@@ -1,4 +1,6 @@
 import os, pickle
+import time
+
 import numpy as np
 import pandas as pd
 import wandb
@@ -31,9 +33,8 @@ class Trainer:
         if self.features is None:
             self.features = [f for f in df.columns if f not in [self.id_col, self.tar_col]]
 
-        # ndarray
-        # pd.DataFrame
-        features = df[self.features].values
+        # Extract Features, label, Id
+        features = df[self.features]
         label = df[self.tar_col].values
         ids = df[self.id_col].values
 
@@ -50,8 +51,8 @@ class Trainer:
 
         # Cross Validation Score
         for i, (trn_idx, val_idx) in enumerate(self.cv.split(features, label)):
-            x_trn, y_trn = features[trn_idx], label[trn_idx]
-            x_val, y_val = features[val_idx], label[val_idx]
+            x_trn, y_trn = features.iloc[trn_idx], label[trn_idx]
+            x_val, y_val = features.iloc[val_idx], label[val_idx]
 
             oof = self.model.train(x_trn, y_trn, x_val, y_val, features=self.features)
 
@@ -92,32 +93,38 @@ class Trainer:
         # Logging
         sub_name = 'oof.csv'
         oof.to_csv(os.path.join(self.cfg.data.asset_dir, sub_name), index=False)
+        time.sleep(5)
         wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
 
         # Save Models
         sub_name = 'models.pkl'
         with open(os.path.join(self.cfg.data.asset_dir, sub_name), 'wb') as f:
             pickle.dump(self.models, f)
+        time.sleep(5)
         wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
 
-        # Feature Importances
-        try:
-            feat_imp = np.zeros(len(self.features))
-            for model in self.models:
-                feat_imp += model.get_feature_importance()
+        # Feature Importance
+        feat_imp = np.zeros(len(self.features))
+        for model in self.models:
+            feat_imp += model.get_feature_importance()
+        # Average Importance
+        feat_imp /= len(self.models)
 
-            feat_imp /= len(self.models)
+        feat_imp_df = pd.DataFrame({
+            'feature': self.features,
+            'importance': feat_imp
+        })
 
-            feat_imp_df = pd.DataFrame({
-                'feature': self.features,
-                'importance': feat_imp
-            })
+        feat_imp_df = feat_imp_df.sort_values(by='importance', ascending=False).reset_index(drop=True)
 
-            sub_name = 'feature_importance.csv'
-            feat_imp_df.to_csv(os.path.join(self.cfg.data.asset_dir, sub_name), index=False)
-            wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
-        except:
-            pass
+        sub_name = 'feature_importance.csv'
+        feat_imp_df.to_csv(os.path.join(self.cfg.data.asset_dir, sub_name), index=False)
+        time.sleep(5)
+        wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
+
+        wandb.log({
+            'feature_importance': wandb.Table(dataframe=feat_imp_df)
+        })
 
     def fit(self, df):
         features, label, ids = self._prepare_data(df)
