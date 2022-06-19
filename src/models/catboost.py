@@ -58,12 +58,14 @@ class CBModel(BaseModel):
             cat_features=self.cat_features, verbose=50
         )
 
-        oof = self.model.predict_proba(x_val)[:, 1]
+        # oof = self.model.predict_proba(x_val)[:, 1]
+        oof = self.model.predict(x_val, prediction_type='Probability')[:, 1]
 
         return oof
 
     def predict(self, x_test):
-        pred = self.model.predict_proba(x_test)[:, 1]
+        # pred = self.model.predict_proba(x_test)[:, 1]
+        pred = self.model.predict(x_test, prediction_type='Probability')[:, 1]
         return pred
 
     def get_feature_importance(self):
