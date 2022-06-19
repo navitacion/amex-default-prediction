@@ -57,9 +57,8 @@ def main(cfg):
         f for f in org_features_df.columns if f not in CAT_FEATURES + DATE_FEATURES + ['customer_ID']
     ]
     transformers = [
-        # GroupbyIDTransformer(cnt_features, aggs=['max', 'mean', 'std', 'last']),
-        GroupbyIDTransformer(cnt_features, aggs=['last']),
-        GroupbyIDTransformer(CAT_FEATURES, aggs=['last']),
+        GroupbyIDTransformer(cnt_features, aggs=['max', 'mean', 'std', 'last']),
+        GroupbyIDTransformer(CAT_FEATURES, aggs=['count', 'last']),
         TransactionDays(aggs=['max', 'mean', 'std']),
         P2Increase(aggs=['last']),
         CountTransaction(),
