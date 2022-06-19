@@ -110,6 +110,7 @@ def main(cfg):
 
     # Remove checkpoint folder
     shutil.rmtree(cfg.data.asset_dir)
+    shutil.rmtree('./wandb')
 
     # Clear Cache
     del inferences, transformers, encoder, models

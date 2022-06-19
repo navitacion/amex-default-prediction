@@ -1,4 +1,6 @@
 import os, pickle
+import time
+
 import numpy as np
 import pandas as pd
 import wandb
@@ -91,12 +93,14 @@ class Trainer:
         # Logging
         sub_name = 'oof.csv'
         oof.to_csv(os.path.join(self.cfg.data.asset_dir, sub_name), index=False)
+        time.sleep(5)
         wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
 
         # Save Models
         sub_name = 'models.pkl'
         with open(os.path.join(self.cfg.data.asset_dir, sub_name), 'wb') as f:
             pickle.dump(self.models, f)
+        time.sleep(5)
         wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
 
         # Feature Importance
@@ -115,6 +119,7 @@ class Trainer:
 
         sub_name = 'feature_importance.csv'
         feat_imp_df.to_csv(os.path.join(self.cfg.data.asset_dir, sub_name), index=False)
+        time.sleep(5)
         wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
 
         wandb.log({
