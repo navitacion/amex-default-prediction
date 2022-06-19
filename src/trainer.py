@@ -99,31 +99,27 @@ class Trainer:
             pickle.dump(self.models, f)
         wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
 
-        # Feature Importances
-        try:
-            feat_imp = np.zeros(len(self.features))
-            for model in self.models:
-                feat_imp += model.get_feature_importance()
+        # Feature Importance
+        feat_imp = np.zeros(len(self.features))
+        for model in self.models:
+            feat_imp += model.get_feature_importance()
+        # Average Importance
+        feat_imp /= len(self.models)
 
-            feat_imp /= len(self.models)
+        feat_imp_df = pd.DataFrame({
+            'feature': self.features,
+            'importance': feat_imp
+        })
 
-            feat_imp_df = pd.DataFrame({
-                'feature': self.features,
-                'importance': feat_imp
-            })
+        feat_imp_df = feat_imp_df.sort_values(by='importance', ascending=False).reset_index(drop=True)
 
-            feat_imp_df = feat_imp_df.sort_values(by='importance', ascending=False).reset_index(drop=True)
+        sub_name = 'feature_importance.csv'
+        feat_imp_df.to_csv(os.path.join(self.cfg.data.asset_dir, sub_name), index=False)
+        wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
 
-            sub_name = 'feature_importance.csv'
-            feat_imp_df.to_csv(os.path.join(self.cfg.data.asset_dir, sub_name), index=False)
-            wandb.save(os.path.join(self.cfg.data.asset_dir, sub_name))
-
-            wandb.log({
-                'feature_importance': wandb.Table(dataframe=feat_imp_df)
-            })
-
-        except:
-            pass
+        wandb.log({
+            'feature_importance': wandb.Table(dataframe=feat_imp_df)
+        })
 
     def fit(self, df):
         features, label, ids = self._prepare_data(df)

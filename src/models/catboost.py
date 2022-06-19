@@ -67,4 +67,4 @@ class CBModel(BaseModel):
         return pred
 
     def get_feature_importance(self):
-        return self.model.feature_importance()
+        return self.model.get_feature_importance()

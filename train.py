@@ -57,10 +57,10 @@ def main(cfg):
         f for f in org_features_df.columns if f not in CAT_FEATURES + DATE_FEATURES + ['customer_ID']
     ]
     transformers = [
-        GroupbyIDTransformer(cnt_features, aggs=['max', 'min', 'mean', 'std', 'last']),
-        GroupbyIDTransformer(CAT_FEATURES, aggs=['count', 'last']),
-        TransactionDays(aggs=['max', 'min', 'mean', 'std']),
-        P2Increase(aggs=['max', 'last']),
+        GroupbyIDTransformer(cnt_features, aggs=['max', 'mean', 'std', 'last']),
+        GroupbyIDTransformer(CAT_FEATURES, aggs=['last']),
+        TransactionDays(aggs=['max', 'mean', 'std']),
+        P2Increase(aggs=['last']),
         CountTransaction(),
     ]
 
@@ -98,7 +98,7 @@ def main(cfg):
 
     models = trainer.fit(df)
 
-    del df, model
+    del df, model, trainer
     gc.collect()
 
     # Inference  -----------------------------------------------
@@ -110,6 +110,10 @@ def main(cfg):
 
     # Remove checkpoint folder
     shutil.rmtree(cfg.data.asset_dir)
+
+    # Clear Cache
+    del inferences, transformers, encoder, models
+    gc.collect()
 
 
 if __name__ == "__main__":
