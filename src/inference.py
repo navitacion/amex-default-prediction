@@ -67,8 +67,8 @@ class InferenceScoring:
 
         # Split Test Data Each customer_ID
         for target_ids in tqdm(
-                self._split_array(all_customer_id_test, n_group=self.cfg.inference.chunksize),
-                total=self.cfg.inference.chunksize):
+                self._split_array(all_customer_id_test, n_group=self.cfg.inference.chunk_size),
+                total=self.cfg.inference.chunk_size):
 
             org_features_df = self._extract_train_data_from_specific_id(target_ids)
 

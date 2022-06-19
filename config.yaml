@@ -33,4 +33,4 @@ train:
   model_type: catboost
 
 inference:
-  chunksize: 80
+  chunk_size: 80
