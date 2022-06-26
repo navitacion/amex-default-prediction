@@ -102,7 +102,7 @@ def main(cfg):
     gc.collect()
 
     # Inference  -----------------------------------------------
-    inferences = InferenceScoring(cfg, models, logger, transformers, encoder)
+    inferences = InferenceScoring(cfg, models, logger, transformers)
     inferences.run()
 
     wandb.finish()
@@ -113,7 +113,7 @@ def main(cfg):
     shutil.rmtree('./wandb')
 
     # Clear Cache
-    del inferences, transformers, encoder, models
+    del inferences, transformers, models
     gc.collect()
 
 

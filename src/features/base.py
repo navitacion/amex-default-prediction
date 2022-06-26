@@ -1,19 +1,11 @@
 import gc
 import pandas as pd
-import category_encoders as ce
 
 from src.constant import CAT_FEATURES
 from src.utils import reduce_mem_usage
 
 
-def generate_features(features_df, transformers, label=None, encoder=None):
-    # Label Encoder
-    if encoder is None:
-        encoder = ce.OrdinalEncoder(cols=CAT_FEATURES, handle_unknown='impute')
-        features_df = encoder.fit_transform(features_df)
-    else:
-        features_df = encoder.transform(features_df)
-
+def generate_features(features_df, transformers, label=None):
     for c in CAT_FEATURES:
         features_df[c] = features_df[c].astype('category')
 
@@ -39,4 +31,4 @@ def generate_features(features_df, transformers, label=None, encoder=None):
 
     df = reduce_mem_usage(df)
 
-    return df, encoder
+    return df
