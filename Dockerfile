@@ -1,5 +1,6 @@
 #FROM pytorch/pytorch:1.5.1-cuda10.1-cudnn7-runtime
-FROM python:3.8-slim
+#FROM python:3.8-slim
+FROM nvcr.io/partners/gridai/pytorch-lightning:v1.4.0
 
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive

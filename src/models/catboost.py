@@ -55,7 +55,7 @@ class CBModel(BaseModel):
         )
         self.model.fit(
             x_train, y_train, eval_set=[(x_val, y_val)],
-            cat_features=self.cat_features, verbose=50
+            cat_features=self.cat_features, verbose=100
         )
 
         # oof = self.model.predict_proba(x_val)[:, 1]
