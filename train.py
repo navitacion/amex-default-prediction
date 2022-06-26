@@ -57,14 +57,15 @@ def main(cfg):
         f for f in org_features_df.columns if f not in CAT_FEATURES + DATE_FEATURES + ['customer_ID']
     ]
     transformers = [
-        GroupbyIDTransformer(cnt_features, aggs=['max', 'mean', 'std', 'last']),
+        GroupbyIDTransformer(cnt_features, aggs=['last']),
         GroupbyIDTransformer(CAT_FEATURES, aggs=['count', 'last']),
         TransactionDays(aggs=['max', 'mean', 'std']),
         P2Increase(aggs=['last']),
         CountTransaction(),
     ]
 
-    df, encoder = generate_features(org_features_df, transformers, label)
+    logger.info('generate features')
+    df = generate_features(org_features_df, transformers, label)
     del org_features_df, label
     gc.collect()
 
@@ -102,7 +103,7 @@ def main(cfg):
     gc.collect()
 
     # Inference  -----------------------------------------------
-    inferences = InferenceScoring(cfg, models, logger, transformers, encoder)
+    inferences = InferenceScoring(cfg, models, logger, transformers)
     inferences.run()
 
     wandb.finish()
@@ -113,7 +114,7 @@ def main(cfg):
     shutil.rmtree('./wandb')
 
     # Clear Cache
-    del inferences, transformers, encoder, models
+    del inferences, transformers, models
     gc.collect()
 
 
