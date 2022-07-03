@@ -9,6 +9,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 from src.features.base import generate_features
+from src.constant import DROP_FEATURES
 
 
 class InferenceScoring:
@@ -71,8 +72,11 @@ class InferenceScoring:
 
             org_features_df = self._extract_train_data_from_specific_id(target_ids)
 
+            # Drop Features
+            org_features_df = org_features_df.drop(DROP_FEATURES, axis=1)
+
             # Feature Extract  -----------------------------------------
-            df = generate_features(org_features_df, self.transformers)
+            df = generate_features(org_features_df, self.transformers, logger=self.logger, phase='predict')
             # Memory Clear
             del org_features_df
             gc.collect()

@@ -5,6 +5,8 @@ import yaml
 import shutil
 import wandb
 import hydra
+import warnings
+import pandas as pd
 from dotenv import load_dotenv
 from logging import getLogger, config
 
@@ -14,9 +16,18 @@ from src.trainer import Trainer
 from src.inference import InferenceScoring
 from src.utils import amex_metric
 from src.features.base import generate_features
-from src.features.groupby import GroupbyIDTransformer
-from src.features.date import CountTransaction, TransactionDays, P2Increase
-from src.constant import CAT_FEATURES, DATE_FEATURES
+from src.features.groupby import GroupbyIDTransformer, NullCountPerCustomer
+from src.features.date import (
+    CountTransaction,
+    TransactionDays,
+    RecentDiff,
+    RollingMean,
+    RecentPayDateDiffBeforePay
+)
+from src.constant import CAT_FEATURES, DATE_FEATURES, DROP_FEATURES
+
+pd.options.display.max_rows = None
+pd.options.display.max_columns = None
 
 
 @hydra.main(config_path=".", config_name="config.yaml")
@@ -52,20 +63,30 @@ def main(cfg):
     asset = DataAsset(cfg, logger)
     org_features_df, label = asset.load_train_data()
 
+    # Drop Features
+    org_features_df = org_features_df.drop(DROP_FEATURES, axis=1)
+
     # Feature Extract  -----------------------------------------
     cnt_features = [
         f for f in org_features_df.columns if f not in CAT_FEATURES + DATE_FEATURES + ['customer_ID']
     ]
+
     transformers = [
-        GroupbyIDTransformer(cnt_features, aggs=['last']),
-        GroupbyIDTransformer(CAT_FEATURES, aggs=['count', 'last']),
+        GroupbyIDTransformer(cnt_features, aggs=['max', 'min', 'mean', 'last']),
+        GroupbyIDTransformer(CAT_FEATURES, aggs=['last']),
         TransactionDays(aggs=['max', 'mean', 'std']),
-        P2Increase(aggs=['last']),
-        CountTransaction(),
+        RecentDiff(cnt_features, interval=1),
+        # RecentDiff(cnt_features, interval=2),
+        # RecentDiff(cnt_features, interval=3),
+        RollingMean(cnt_features, window=6),
+        RecentPayDateDiffBeforePay(),
+        CountTransaction(),  # 特徴量重要度が0
+        NullCountPerCustomer(cnt_features + CAT_FEATURES),
     ]
 
-    logger.info('generate features')
-    df = generate_features(org_features_df, transformers, label)
+    df = generate_features(org_features_df, transformers, logger, phase='train')
+    df = pd.merge(df, label, on='customer_ID', how='left')
+
     del org_features_df, label
     gc.collect()
 
@@ -103,8 +124,9 @@ def main(cfg):
     gc.collect()
 
     # Inference  -----------------------------------------------
-    inferences = InferenceScoring(cfg, models, logger, transformers)
-    inferences.run()
+    if not cfg.debug:
+        inferences = InferenceScoring(cfg, models, logger, transformers)
+        inferences.run()
 
     wandb.finish()
     time.sleep(3)
@@ -114,9 +136,10 @@ def main(cfg):
     shutil.rmtree('./wandb')
 
     # Clear Cache
-    del inferences, transformers, models
+    del transformers, models
     gc.collect()
 
 
 if __name__ == "__main__":
+    warnings.simplefilter('ignore')
     main()
