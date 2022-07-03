@@ -1,7 +1,14 @@
+import gc
 from pathlib import Path
 import pickle
 import pandas as pd
+from tqdm import tqdm
 
+from src.constant import CAT_FEATURES
+from src.utils import reduce_mem_usage
+
+
+# Load Dataset  ------------------------------------------------------------------------
 
 class DataAsset:
 
@@ -11,10 +18,26 @@ class DataAsset:
         self.logger = logger
 
     def _extract_train_data_from_specific_id(self, customer_ids: list):
-        pickle_path = self.data_dir.joinpath('train_data_prep.pkl')
-        with open(pickle_path, 'rb') as f:
-            features = pickle.load(f)
-        features = features[features['customer_ID'].isin(customer_ids)].reset_index(drop=True)
+
+        features = pd.DataFrame()
+        feature_types = ['D', 'S', 'P', 'B', 'R']
+
+        for i, s in enumerate(feature_types):
+
+            pickle_path = self.data_dir.joinpath(f'train_data_prep_{s}.pkl')
+            with open(pickle_path, 'rb') as f:
+                _features = pickle.load(f)
+
+            _features = _features[_features['customer_ID'].isin(customer_ids)]
+
+            if i == 0:
+                features = _features
+            else:
+                # PK: customer_ID + S_2
+                features = pd.merge(features, _features, on=['customer_ID', 'S_2'])
+
+            del _features
+            gc.collect()
 
         return features
 

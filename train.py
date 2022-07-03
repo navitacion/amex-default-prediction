@@ -5,6 +5,7 @@ import yaml
 import shutil
 import wandb
 import hydra
+import warnings
 from dotenv import load_dotenv
 from logging import getLogger, config
 
@@ -133,4 +134,5 @@ def main(cfg):
 
 
 if __name__ == "__main__":
+    warnings.simplefilter('ignore')
     main()
