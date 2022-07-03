@@ -31,7 +31,10 @@ catboost:
 
 train:
   exp_name: test
-  model_type: catboost
+  model_type: lgb
+  chunk_size: 2
 
 inference:
   chunk_size: 100
+
+debug: False

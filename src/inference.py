@@ -72,7 +72,7 @@ class InferenceScoring:
             org_features_df = self._extract_train_data_from_specific_id(target_ids)
 
             # Feature Extract  -----------------------------------------
-            df = generate_features(org_features_df, self.transformers)
+            df = generate_features(org_features_df, self.transformers, logger=self.logger, phase='predict')
             # Memory Clear
             del org_features_df
             gc.collect()
