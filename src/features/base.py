@@ -5,7 +5,7 @@ from src.constant import CAT_FEATURES
 from src.utils import reduce_mem_usage
 
 
-def generate_features(features_df, transformers, label=None, logger=None, phase='train'):
+def generate_features(features_df, transformers, logger=None, phase='train'):
     if logger is not None:
         logger.info('generate features')
 

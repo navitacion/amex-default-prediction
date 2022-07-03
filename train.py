@@ -6,6 +6,7 @@ import shutil
 import wandb
 import hydra
 import warnings
+import pandas as pd
 from dotenv import load_dotenv
 from logging import getLogger, config
 
@@ -24,6 +25,9 @@ from src.features.date import (
     RecentPayDateDiffBeforePay
 )
 from src.constant import CAT_FEATURES, DATE_FEATURES, DROP_FEATURES
+
+pd.options.display.max_rows = None
+pd.options.display.max_columns = None
 
 
 @hydra.main(config_path=".", config_name="config.yaml")
@@ -72,14 +76,17 @@ def main(cfg):
         GroupbyIDTransformer(CAT_FEATURES, aggs=['last']),
         TransactionDays(aggs=['max', 'mean', 'std']),
         RecentDiff(cnt_features, interval=1),
-        RollingMean(cnt_features, window=3),
+        # RecentDiff(cnt_features, interval=2),
+        # RecentDiff(cnt_features, interval=3),
         RollingMean(cnt_features, window=6),
         RecentPayDateDiffBeforePay(),
-        # CountTransaction(),  # 特徴量重要度が0
+        CountTransaction(),  # 特徴量重要度が0
         NullCountPerCustomer(cnt_features + CAT_FEATURES),
     ]
 
-    df = generate_features(org_features_df, transformers, label, logger)
+    df = generate_features(org_features_df, transformers, logger, phase='train')
+    df = pd.merge(df, label, on='customer_ID', how='left')
+
     del org_features_df, label
     gc.collect()
 

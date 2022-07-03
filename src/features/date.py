@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import cudf
 
 
 class CountTransaction:
@@ -65,12 +66,15 @@ class RecentDiff:
     def transform(self, df, phase):
         _df = df[['customer_ID', 'S_2'] + self.feats].copy()
 
+        _df = cudf.from_pandas(_df)
+
         for f in self.feats:
             # customer_IDごとに特徴量の差分を計算する
             _df[f'fe_recentDiff_interval_{self.interval}_{f}'] = _df.groupby('customer_ID')[f].diff(self.interval)
 
             del _df[f]
 
+        _df = _df.to_pandas()
         # 最新の日付の差分を取る
         _df = _df.groupby('customer_ID').tail(1).reset_index(drop=True)
 
@@ -91,13 +95,22 @@ class RollingMean:
     def transform(self, df, phase):
         _df = df[['customer_ID', 'S_2'] + self.feats].copy()
 
+        _df = cudf.from_pandas(_df)
+
+        # 移動平均
+        def func(x):
+            n = 0
+            for i in range(self.window):
+                n += x.shift(i) / self.window
+            return n
+
         for f in self.feats:
             # customer_IDごとに特徴量の差分を計算する
-            _df[f'fe_rollingMean_window_{self.window}_{f}'] = _df.groupby('customer_ID')[f].transform(
-                lambda x: x.rolling(self.window).mean())
+            _df[f'fe_rollingMean_window_{self.window}_{f}'] = _df.groupby('customer_ID')[f].pipe(func)
 
             del _df[f]
 
+        _df = _df.to_pandas()
         # 最新の日付の差分を取る
         _df = _df.groupby('customer_ID').tail(1).reset_index(drop=True)
 
@@ -123,8 +136,13 @@ class RecentPayDateDiffBeforePay:
         _df = df[['customer_ID', 'S_2']].copy()
         _df['S_2'] = pd.to_datetime(_df['S_2'])
 
+        _df = cudf.from_pandas(_df)
+
         feat_name = 'fe_recentPayDiffBeforePay'
         _df[feat_name] = _df.groupby('customer_ID')['S_2'].diff()
+
+        _df = _df.to_pandas()
+
         _df[feat_name] = _df[feat_name].apply(lambda x: x.days)
 
         # 最新の日付の差分を取る
