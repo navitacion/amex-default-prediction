@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from catboost import CatBoostClassifier
+from catboost import CatBoostClassifier, EFstrType
 
 from src.models.base import BaseModel
 
@@ -69,4 +69,6 @@ class CBModel(BaseModel):
         return pred
 
     def get_feature_importance(self):
-        return self.model.get_feature_importance()
+        # Ref: https://github.com/catboost/catboost/blob/master/catboost/python-package/catboost/core.py#L209-L223
+        # Ref: https://catboost.ai/en/docs/concepts/cli-reference_fstr-calc#description
+        return self.model.get_feature_importance(type=EFstrType.LossFunctionChange)

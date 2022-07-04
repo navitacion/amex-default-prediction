@@ -81,7 +81,7 @@ def main(cfg):
         RollingMean(cnt_features, window=6),
         RecentPayDateDiffBeforePay(),
         CountTransaction(),  # 特徴量重要度が0
-        NullCountPerCustomer(cnt_features + CAT_FEATURES),
+        # NullCountPerCustomer(cnt_features + CAT_FEATURES),
     ]
 
     df = generate_features(org_features_df, transformers, logger, phase='train')
