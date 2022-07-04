@@ -50,12 +50,13 @@ class NullCountPerCustomer:
             group[v] = group[v].astype(np.uint8)
 
         # すべて同じ値（欠損値がない）カラムは除外
-        drop_f = []
-        for c in group.columns:
-            if group[c].max() == group[c].min():
-                drop_f.append(c)
+        if phase == 'train':
+            drop_f = []
+            for c in group.columns:
+                if group[c].max() == group[c].min():
+                    drop_f.append(c)
 
-        group = group.drop(drop_f, axis=1)
+            group = group.drop(drop_f, axis=1)
 
         return group
 
