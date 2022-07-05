@@ -14,5 +14,5 @@ class BaseModel(metaclass=ABCMeta):
     def predict(self, x_test):
         raise NotImplementedError
 
-    def get_feature_importance(self):
+    def get_feature_importance(self, features, label):
         pass

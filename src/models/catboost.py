@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from catboost import CatBoostClassifier, EFstrType
+from catboost import CatBoostClassifier, EFstrType, Pool
 
 from src.models.base import BaseModel
 
@@ -50,25 +50,23 @@ class CBModel(BaseModel):
         self.model = None
         self.features = features
 
-        self.model = CatBoostClassifier(
-            **self.params
-        )
-        self.model.fit(
-            x_train, y_train, eval_set=[(x_val, y_val)],
-            cat_features=self.cat_features, verbose=100
-        )
+        train_data = Pool(x_train, y_train, cat_features=self.cat_features)
+        val_data = Pool(x_val, y_val, cat_features=self.cat_features)
 
-        # oof = self.model.predict_proba(x_val)[:, 1]
+        self.model = CatBoostClassifier(**self.params)
+        self.model.fit(train_data, eval_set=val_data, verbose=100)
+
         oof = self.model.predict(x_val, prediction_type='Probability')[:, 1]
 
         return oof
 
     def predict(self, x_test):
-        # pred = self.model.predict_proba(x_test)[:, 1]
         pred = self.model.predict(x_test, prediction_type='Probability')[:, 1]
         return pred
 
-    def get_feature_importance(self):
+    def get_feature_importance(self, features, label):
         # Ref: https://github.com/catboost/catboost/blob/master/catboost/python-package/catboost/core.py#L209-L223
         # Ref: https://catboost.ai/en/docs/concepts/cli-reference_fstr-calc#description
-        return self.model.get_feature_importance(type=EFstrType.LossFunctionChange)
+        features_pool = Pool(features, label, cat_features=self.cat_features)
+
+        return self.model.get_feature_importance(features_pool, type=EFstrType.LossFunctionChange)

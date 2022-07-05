@@ -18,14 +18,12 @@ def generate_features(features_df, transformers, logger=None, phase='train'):
     df = pd.DataFrame()
 
     for i, transformer in enumerate(transformers):
-
-        logger.info(f'Execute Feature {transformer.__class__.__name__}')
+        if logger is not None:
+            logger.info(f'Execute Feature {transformer.__class__.__name__}')
 
         _feats = transformer(features_df, phase=phase)
 
         _feats = reduce_mem_usage(_feats)
-
-        logger.info(f'Extracted Feature Shape {_feats.shape}')
 
         if i == 0:
             df = _feats.copy()
@@ -35,7 +33,8 @@ def generate_features(features_df, transformers, logger=None, phase='train'):
         del _feats
         gc.collect()
 
-        logger.info(f'Data Shape {df.shape}')
+        if logger is not None:
+            logger.info(f'Data Shape {df.shape}')
 
     df = reduce_mem_usage(df)
 

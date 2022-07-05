@@ -76,7 +76,7 @@ class Trainer:
 
         return preds, self.models
 
-    def _train_end(self, ids, preds):
+    def _train_end(self, ids, preds, features=None, label=None):
         """
         End of Train loop per crossvalidation fold
         Logging and oof file
@@ -106,7 +106,7 @@ class Trainer:
         # Feature Importance
         feat_imp = np.zeros(len(self.features))
         for model in self.models:
-            feat_imp += model.get_feature_importance()
+            feat_imp += model.get_feature_importance(features, label)
         # Average Importance
         feat_imp /= len(self.models)
 
@@ -129,6 +129,6 @@ class Trainer:
     def fit(self, df):
         features, label, ids = self._prepare_data(df)
         preds, models = self._train_cv(features, label)
-        self._train_end(ids, preds)
+        self._train_end(ids, preds, features, label)
 
         return models

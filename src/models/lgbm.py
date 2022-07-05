@@ -44,5 +44,5 @@ class LGBMModel(BaseModel):
         pred = self.model.predict(x_test, num_iteration=self.model.best_iteration)
         return pred
 
-    def get_feature_importance(self):
+    def get_feature_importance(self, features, label):
         return self.model.feature_importance(importance_type='gain')

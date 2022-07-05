@@ -76,7 +76,7 @@ class InferenceScoring:
             org_features_df = org_features_df.drop(DROP_FEATURES, axis=1)
 
             # Feature Extract  -----------------------------------------
-            df = generate_features(org_features_df, self.transformers, logger=self.logger, phase='predict')
+            df = generate_features(org_features_df, self.transformers, logger=None, phase='predict')
             # Memory Clear
             del org_features_df
             gc.collect()

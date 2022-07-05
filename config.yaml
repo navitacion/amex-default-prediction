@@ -24,8 +24,8 @@ lgb:
   verbose: -1
 
 catboost:
-  iterations: 5000
-  early_stopping_rounds: 100
+  iterations: 500000
+  early_stopping_rounds: 1000
   random_state: *seed
   use_best_model: True
 
@@ -34,6 +34,6 @@ train:
   model_type: catboost
 
 inference:
-  chunk_size: 100
+  chunk_size: 10
 
 debug: False
