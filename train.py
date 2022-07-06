@@ -7,6 +7,7 @@ import wandb
 import hydra
 import warnings
 import pandas as pd
+from tqdm import tqdm
 from dotenv import load_dotenv
 from logging import getLogger, config
 
@@ -76,15 +77,29 @@ def main(cfg):
         GroupbyIDTransformer(CAT_FEATURES, aggs=['last']),
         TransactionDays(aggs=['max', 'mean', 'std']),
         RecentDiff(cnt_features, interval=1),
-        # RecentDiff(cnt_features, interval=2),
-        # RecentDiff(cnt_features, interval=3),
+        RecentDiff(cnt_features, interval=2),
+        RecentDiff(cnt_features, interval=3),
         RollingMean(cnt_features, window=6),
         RecentPayDateDiffBeforePay(),
         CountTransaction(),  # 特徴量重要度が0
-        # NullCountPerCustomer(cnt_features + CAT_FEATURES),
+        NullCountPerCustomer(cnt_features + CAT_FEATURES),
     ]
 
-    df = generate_features(org_features_df, transformers, logger, phase='train')
+    # Split Trains for avoiding memory killed
+    train_ids = org_features_df['customer_ID'].unique().tolist()
+
+    def _split_array(_data: list, n_group: int):
+        for i_chunk in range(n_group):
+            yield _data[i_chunk * len(_data) // n_group:(i_chunk + 1) * len(_data) // n_group]
+
+    df = []
+    for target_ids in tqdm(_split_array(train_ids, n_group=5), total=5):
+        tmp = org_features_df[org_features_df['customer_ID'].isin(target_ids)].reset_index(drop=True)
+
+        df.append(generate_features(tmp, transformers, logger, phase='train'))
+
+    df = pd.concat(df, axis=0, ignore_index=True)
+
     df = pd.merge(df, label, on='customer_ID', how='left')
 
     del org_features_df, label
