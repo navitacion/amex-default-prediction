@@ -73,12 +73,13 @@ def main(cfg):
     ]
 
     transformers = [
-        GroupbyIDTransformer(cnt_features, aggs=['max', 'min', 'mean', 'last']),
+        GroupbyIDTransformer(cnt_features, aggs=['max', 'min', 'mean', 'std', 'last']),
         GroupbyIDTransformer(CAT_FEATURES, aggs=['last']),
         TransactionDays(aggs=['max', 'mean', 'std']),
         RecentDiff(cnt_features, interval=1),
         RecentDiff(cnt_features, interval=2),
         RecentDiff(cnt_features, interval=3),
+        # RollingMean(cnt_features, window=3),
         RollingMean(cnt_features, window=6),
         RecentPayDateDiffBeforePay(),
         CountTransaction(),  # 特徴量重要度が0
@@ -93,7 +94,7 @@ def main(cfg):
             yield _data[i_chunk * len(_data) // n_group:(i_chunk + 1) * len(_data) // n_group]
 
     df = []
-    for target_ids in tqdm(_split_array(train_ids, n_group=5), total=5):
+    for target_ids in tqdm(_split_array(train_ids, n_group=cfg.train.chunk_size), total=cfg.train.chunk_size):
         tmp = org_features_df[org_features_df['customer_ID'].isin(target_ids)].reset_index(drop=True)
 
         df.append(generate_features(tmp, transformers, logger, phase='train'))
