@@ -1,11 +1,14 @@
 import gc
 import os
+import pickle
 import time
 import yaml
 import shutil
 import wandb
 import hydra
 import warnings
+from pathlib import Path
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from dotenv import load_dotenv
@@ -14,7 +17,6 @@ from logging import getLogger, config
 from src.data import DataAsset
 from src.models import LGBMModel, CBModel
 from src.trainer import Trainer
-from src.inference import InferenceScoring
 from src.utils import amex_metric
 from src.features.base import generate_features
 from src.features.groupby import GroupbyIDTransformer, NullCountPerCustomer
@@ -25,7 +27,10 @@ from src.features.date import (
     RollingMean,
     RecentPayDateDiffBeforePay
 )
+from src.features.cluster import KmeansCluster
+from src.features.encoding import FrequencyEncoder, TargetEncoder
 from src.constant import CAT_FEATURES, DATE_FEATURES, DROP_FEATURES
+from src.utils import reduce_mem_usage
 
 pd.options.display.max_rows = None
 pd.options.display.max_columns = None
@@ -62,49 +67,27 @@ def main(cfg):
 
     # Load Dataset  --------------------------------------------
     asset = DataAsset(cfg, logger)
-    org_features_df, label = asset.load_train_data()
-
-    # Drop Features
-    org_features_df = org_features_df.drop(DROP_FEATURES, axis=1)
 
     # Feature Extract  -----------------------------------------
+    t = pd.read_csv(Path(cfg.data.data_dir).joinpath('train_data.csv'), nrows=3)
+
     cnt_features = [
-        f for f in org_features_df.columns if f not in CAT_FEATURES + DATE_FEATURES + ['customer_ID']
+        f for f in t.columns if f not in CAT_FEATURES + DATE_FEATURES + DROP_FEATURES + ['customer_ID']
     ]
 
     transformers = [
-        GroupbyIDTransformer(cnt_features, aggs=['max', 'min', 'mean', 'std', 'last']),
+        GroupbyIDTransformer(cnt_features, aggs=['max', 'min', 'mean', 'last']),
         GroupbyIDTransformer(CAT_FEATURES, aggs=['last']),
         TransactionDays(aggs=['max', 'mean', 'std']),
         RecentDiff(cnt_features, interval=1),
         RecentDiff(cnt_features, interval=2),
-        RecentDiff(cnt_features, interval=3),
+        # RecentDiff(cnt_features, interval=3),
         # RollingMean(cnt_features, window=3),
         RollingMean(cnt_features, window=6),
         RecentPayDateDiffBeforePay(),
-        CountTransaction(),  # 特徴量重要度が0
-        NullCountPerCustomer(cnt_features + CAT_FEATURES),
+        # CountTransaction(),  # 特徴量重要度が0
+        # NullCountPerCustomer(cnt_features + CAT_FEATURES),
     ]
-
-    # Split Trains for avoiding memory killed
-    train_ids = org_features_df['customer_ID'].unique().tolist()
-
-    def _split_array(_data: list, n_group: int):
-        for i_chunk in range(n_group):
-            yield _data[i_chunk * len(_data) // n_group:(i_chunk + 1) * len(_data) // n_group]
-
-    df = []
-    for target_ids in tqdm(_split_array(train_ids, n_group=cfg.train.chunk_size), total=cfg.train.chunk_size):
-        tmp = org_features_df[org_features_df['customer_ID'].isin(target_ids)].reset_index(drop=True)
-
-        df.append(generate_features(tmp, transformers, logger, phase='train'))
-
-    df = pd.concat(df, axis=0, ignore_index=True)
-
-    df = pd.merge(df, label, on='customer_ID', how='left')
-
-    del org_features_df, label
-    gc.collect()
 
     # Model  ---------------------------------------------------
     # LightGBM
@@ -115,25 +98,65 @@ def main(cfg):
     # CatBoost
     elif cfg.train.model_type == 'catboost':
         wandb.config.update(dict(cfg.catboost))
-        # Get Category
-        cat_features = [
-            c for c in df.select_dtypes(include=['object', 'category']).columns if c.startswith('fe_')
-        ]
-        model = CBModel(dict(cfg.catboost), cat_features)
-
+        model = CBModel(dict(cfg.catboost))
     else:
         raise (TypeError)
 
-    # Training  -------------------------------------------------
+    # Feature Engineering  -------------------------------------------------
     logger.info(f'Train {cfg.train.model_type} Model')
+
+    # Calc Features
+    dfs = []
+    for df in tqdm(asset.train_generator(), total=cfg.train.chunk_size):
+        dfs.append(generate_features(df, transformers, logger, phase='train'))
+    df = pd.concat(dfs, axis=0, ignore_index=True)
+
+    # TODO: Kmeans系の特徴量
+    kmeans_prep = KmeansCluster(
+        n_clusters=cfg.prep.kmean_n_cluster,
+        seed=cfg.data.seed
+    )
+    res = kmeans_prep(df, phase='train')
+    df = pd.merge(df, res, on='customer_ID')
+
+    # Add label
+    label = pd.read_csv(Path(cfg.data.data_dir).joinpath('train_labels.csv'))
+    df = pd.merge(df, label, on='customer_ID', how='left')
+
+    # TODO: encoding系
+    # categoryとint型の変数を対象
+    tar_cols = df.select_dtypes(include=[np.int8, np.int16, 'category']).columns
+    freq_enc = FrequencyEncoder(tar_cols)
+    res = freq_enc(df, phase='train')
+    df = pd.merge(df, res, on='customer_ID')
+
+    tar_enc = TargetEncoder(tar_cols)
+    res = tar_enc(df, phase='train')
+    df = pd.merge(df, res, on='customer_ID')
+
+    logger.info(f'Train Data Shape: {df.shape}')
+    df = reduce_mem_usage(df)
+    print(df.dtypes)
+
+    del label
+    gc.collect()
+
+    # Save as pickle
+    filename = os.path.join(cfg.data.asset_dir, 'train.pkl')
+    with open(filename, 'wb') as f:
+        pickle.dump(df, f)
+    wandb.save(filename)
+
+    # Training  ----------------------------------------------------------
+    # Set Trainer Class
     trainer = Trainer(
         model, cfg,
         id_col='customer_ID',
         tar_col='target',
-        features=None,
         criterion=amex_metric
     )
 
+    # Train
     models = trainer.fit(df)
 
     del df, model, trainer
@@ -141,8 +164,48 @@ def main(cfg):
 
     # Inference  -----------------------------------------------
     if not cfg.debug:
-        inferences = InferenceScoring(cfg, models, logger, transformers)
-        inferences.run()
+        ids = []
+        preds = []
+
+        for df, target_ids in tqdm(asset.test_generator(), total=cfg.inference.chunk_size):
+
+            # Feature Engineering  ------------------------------
+            df = generate_features(df, transformers, logger=None, phase='predict')
+
+            # TODO: KMeans系の特徴量
+            res = kmeans_prep(df, phase='predict')
+            df = pd.merge(df, res, on='customer_ID')
+
+            # TODO: Encoding系の特徴量
+            res = freq_enc(df, phase='predict')
+            df = pd.merge(df, res, on='customer_ID')
+
+            res = tar_enc(df, phase='predict')
+            df = pd.merge(df, res, on='customer_ID')
+
+            # Inference  -----------------------------------------
+            pred = np.zeros(len(df))
+            for model in models:
+                pred += model.predict(df[model.features])
+
+            # Avg
+            pred /= len(models)
+
+            ids.extend(target_ids)
+            preds.extend(pred)
+
+            print(len(ids))
+            print(len(preds))
+
+        res = pd.DataFrame({
+            'customer_ID': ids,
+            'prediction': preds
+        })
+
+        # Save to wandb
+        sub_name = 'submission.csv'
+        res.to_csv(os.path.join(cfg.data.asset_dir, sub_name), index=False)
+        wandb.save(os.path.join(cfg.data.asset_dir, sub_name))
 
     wandb.finish()
     time.sleep(3)

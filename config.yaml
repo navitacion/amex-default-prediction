@@ -5,9 +5,13 @@ hydra:
 data:
   data_dir: ./input
   asset_dir: ./assets
-  sample_frac: 1.0
+  sample_frac: 0.01
   seed: &seed 0
-  n_splits: 5
+  n_splits: 2
+
+prep:
+  kmean_n_cluster: 8
+
 
 lgb:
   num_iteration: 100000
@@ -32,7 +36,7 @@ catboost:
 train:
   exp_name: test
   model_type: catboost
-  chunk_size: 15
+  chunk_size: 1
 
 inference:
   chunk_size: 25

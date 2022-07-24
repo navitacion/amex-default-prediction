@@ -19,11 +19,12 @@ class LGBMModel(BaseModel):
     def __init__(self, params):
         super(LGBMModel, self).__init__(params)
 
-    def train(self, x_train, y_train, x_val, y_val, features):
+    def train(self, x_train, y_train, x_val, y_val, features, cat_features):
         self.model = None
+        self.features = features
+        self.cat_features = cat_features
         train_data = lgb.Dataset(x_train, label=y_train)
         valid_data = lgb.Dataset(x_val, label=y_val, reference=train_data)
-        self.features = features
 
         self.model = lgb.train(
             self.params,

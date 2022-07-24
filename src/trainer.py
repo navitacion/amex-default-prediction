@@ -1,3 +1,4 @@
+import gc
 import os, pickle
 import time
 
@@ -9,12 +10,11 @@ from sklearn.metrics import roc_auc_score
 
 
 class Trainer:
-    def __init__(self, model, cfg, id_col: str, tar_col: str, features, criterion):
+    def __init__(self, model, cfg, id_col: str, tar_col: str, criterion):
         self.model = model
         self.cfg = cfg
         self.id_col = id_col
         self.tar_col = tar_col
-        self.features = features
         self.cv = StratifiedKFold(n_splits=cfg.data.n_splits, shuffle=True, random_state=cfg.data.seed)
         self.criterion = criterion
 
@@ -30,15 +30,18 @@ class Trainer:
         features, label, ids
         """
 
-        if self.features is None:
-            self.features = [f for f in df.columns if f not in [self.id_col, self.tar_col]]
+        self.features = [f for f in df.columns if f not in [self.id_col, self.tar_col]]
+
+        self.cat_features = [
+            c for c in df.select_dtypes(include=['object', 'category']).columns if c.startswith('fe_')
+        ]
 
         # Extract Features, label, Id
-        features = df[self.features]
+        data = df[self.features]
         label = df[self.tar_col].values
         ids = df[self.id_col].values
 
-        return features, label, ids
+        return data, label, ids
 
     def _train_cv(self, features, label):
         """
@@ -51,19 +54,24 @@ class Trainer:
 
         # Cross Validation Score
         for i, (trn_idx, val_idx) in enumerate(self.cv.split(features, label)):
-            x_trn, y_trn = features.iloc[trn_idx], label[trn_idx]
-            x_val, y_val = features.iloc[val_idx], label[val_idx]
-
-            oof = self.model.train(x_trn, y_trn, x_val, y_val, features=self.features)
+            # Train
+            oof = self.model.train(
+                x_train=features.iloc[trn_idx],
+                y_train=label[trn_idx],
+                x_val=features.iloc[val_idx],
+                y_val=label[val_idx],
+                features=self.features,
+                cat_features=self.cat_features
+            )
 
             # Score
-            score = self.criterion(y_val, oof)
+            score = self.criterion(label[val_idx], oof)
 
             # Logging
             wandb.log({'Fold Score': score}, step=i)
             print(f'Fold {i}  Score: {score:.3f}')
             preds[val_idx] = oof
-            oof_label[val_idx] = y_val
+            oof_label[val_idx] = label[val_idx]
             self.models.append(self.model)
 
         # All Fold Score
@@ -127,8 +135,8 @@ class Trainer:
         })
 
     def fit(self, df):
-        features, label, ids = self._prepare_data(df)
-        preds, models = self._train_cv(features, label)
-        self._train_end(ids, preds, features, label)
+        data, label, ids = self._prepare_data(df)
+        preds, models = self._train_cv(data, label)
+        self._train_end(ids, preds, data, label)
 
         return models

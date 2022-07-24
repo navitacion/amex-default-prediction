@@ -35,10 +35,9 @@ class CBAmexMetric(object):
 
 
 class CBModel(BaseModel):
-    def __init__(self, params, cat_features):
+    def __init__(self, params):
         super(CBModel, self).__init__(params)
         self.params['eval_metric'] = CBAmexMetric()
-        self.cat_features = cat_features
 
     def train(
             self,
@@ -46,9 +45,11 @@ class CBModel(BaseModel):
             y_train: pd.DataFrame,
             x_val: pd.DataFrame,
             y_val: pd.DataFrame,
-            features: list) -> pd.DataFrame:
+            features: list,
+            cat_features: list) -> pd.DataFrame:
         self.model = None
         self.features = features
+        self.cat_features = cat_features
 
         train_data = Pool(x_train, y_train, cat_features=self.cat_features)
         val_data = Pool(x_val, y_val, cat_features=self.cat_features)
