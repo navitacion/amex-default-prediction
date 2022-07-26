@@ -19,7 +19,7 @@ from src.models import LGBMModel, CBModel
 from src.trainer import Trainer
 from src.utils import amex_metric
 from src.features.base import generate_features
-from src.features.groupby import GroupbyIDTransformer, NullCountPerCustomer
+from src.features.groupby import GroupbyIDTransformer, NullCountPerCustomer, GroupbyIDFuncTransformer
 from src.features.date import (
     CountTransaction,
     TransactionDays,
@@ -27,7 +27,7 @@ from src.features.date import (
     RollingMean,
     RecentPayDateDiffBeforePay
 )
-from src.features.cluster import KmeansCluster
+from src.features.cluster import KmeansCluster, PCAExecuter, SVDExecuter
 from src.features.encoding import FrequencyEncoder, TargetEncoder
 from src.constant import CAT_FEATURES, DATE_FEATURES, DROP_FEATURES
 from src.utils import reduce_mem_usage
@@ -56,6 +56,9 @@ def main(cfg):
     wandb.config.update(dict(cfg.data))
     wandb.config.update(dict(cfg.train))
 
+    # Log Code
+    wandb.run.log_code(".", include_fn=lambda path: path.endswith(".py"))
+
     with open('logging.yaml', 'r') as yml:
         logger_cfg = yaml.safe_load(yml)
 
@@ -75,14 +78,23 @@ def main(cfg):
         f for f in t.columns if f not in CAT_FEATURES + DATE_FEATURES + DROP_FEATURES + ['customer_ID']
     ]
 
+    # groupby func
+    funcs = {
+        # 'minmaxdiff': lambda x: x.max() - x.min(),
+        'quantile_75': lambda x: x.quantile(0.75),
+        'quantile_25': lambda x: x.quantile(0.25),
+    }
+
     transformers = [
-        GroupbyIDTransformer(cnt_features, aggs=['max', 'min', 'mean', 'last']),
+        GroupbyIDTransformer(cnt_features, aggs=['min', 'max', 'std', 'mean', 'last']),
+        GroupbyIDFuncTransformer(cnt_features, funcs=funcs),
         GroupbyIDTransformer(CAT_FEATURES, aggs=['last']),
         TransactionDays(aggs=['max', 'mean', 'std']),
         RecentDiff(cnt_features, interval=1),
-        RecentDiff(cnt_features, interval=2),
+        # RecentDiff(cnt_features, interval=2),
         # RecentDiff(cnt_features, interval=3),
-        # RollingMean(cnt_features, window=3),
+        RollingMean(cnt_features, window=1),
+        RollingMean(cnt_features, window=3),
         RollingMean(cnt_features, window=6),
         RecentPayDateDiffBeforePay(),
         # CountTransaction(),  # 特徴量重要度が0
@@ -112,12 +124,63 @@ def main(cfg):
     df = pd.concat(dfs, axis=0, ignore_index=True)
 
     # TODO: Kmeans系の特徴量
-    kmeans_prep = KmeansCluster(
+    # KMeans  ------------
+    logger.info('Kmeans Features')
+    kmeans_prep_all = KmeansCluster(
+        feats=None,
         n_clusters=cfg.prep.kmean_n_cluster,
-        seed=cfg.data.seed
+        seed=cfg.data.seed,
+        suffix='all'
     )
-    res = kmeans_prep(df, phase='train')
+    res = kmeans_prep_all(df, phase='train')
     df = pd.merge(df, res, on='customer_ID')
+    logger.info(f'Data Shape {df.shape}')
+
+    # 次元圧縮  ------------
+    decomposing_feats = [
+        c for c in df.select_dtypes(exclude=[object, 'category']).columns
+        if c.startswith('fe')
+    ]
+    # PCA
+    logger.info('PCA Features')
+    pca_executer = PCAExecuter(
+        feats=decomposing_feats,
+        n_components=cfg.prep.pca_n_components,
+        seed=cfg.data.seed,
+        suffix='all'
+    )
+    res = pca_executer(df, phase='train')
+    df = pd.merge(df, res, on='customer_ID')
+
+    # Each Feature
+    # R featureが最も重要度が高く他はそうでもなさそう
+    pcas = [pca_executer]
+
+    for s in ['D', 'R']:
+        pca_prep = PCAExecuter(
+            feats=[c for c in df.columns if f'_{s}_' in c],
+            n_components=cfg.prep.pca_n_components,
+            seed=cfg.data.seed,
+            suffix=s
+        )
+        res = pca_prep(df, phase='train')
+        df = pd.merge(df, res, on='customer_ID')
+        pcas.append(pca_prep)
+
+    logger.info(f'Data Shape {df.shape}')
+
+    # SVD
+    logger.info('SVD Features')
+    svd_executer = SVDExecuter(
+        feats=decomposing_feats,
+        n_components=cfg.prep.svd_n_components,
+        seed=cfg.data.seed,
+        suffix='all'
+    )
+    res = svd_executer(df, phase='train')
+    df = pd.merge(df, res, on='customer_ID')
+
+    logger.info(f'Data Shape {df.shape}')
 
     # Add label
     label = pd.read_csv(Path(cfg.data.data_dir).joinpath('train_labels.csv'))
@@ -126,19 +189,24 @@ def main(cfg):
     # TODO: encoding系
     # categoryとint型の変数を対象
     tar_cols = df.select_dtypes(include=[np.int8, np.int16, 'category']).columns
-    freq_enc = FrequencyEncoder(tar_cols)
-    res = freq_enc(df, phase='train')
-    df = pd.merge(df, res, on='customer_ID')
 
+    # Frequency Encoding
+    # そこまで重要度高くない
+    # freq_enc = FrequencyEncoder(tar_cols)
+    # res = freq_enc(df, phase='train')
+    # df = pd.merge(df, res, on='customer_ID')
+
+    # Target Encoding
+    logger.info('Target Encoding Features')
     tar_enc = TargetEncoder(tar_cols)
     res = tar_enc(df, phase='train')
     df = pd.merge(df, res, on='customer_ID')
+    logger.info(f'Data Shape {df.shape}')
 
     logger.info(f'Train Data Shape: {df.shape}')
     df = reduce_mem_usage(df)
-    print(df.dtypes)
 
-    del label
+    del label, res
     gc.collect()
 
     # Save as pickle
@@ -173,12 +241,20 @@ def main(cfg):
             df = generate_features(df, transformers, logger=None, phase='predict')
 
             # TODO: KMeans系の特徴量
-            res = kmeans_prep(df, phase='predict')
+            res = kmeans_prep_all(df, phase='predict')
+            df = pd.merge(df, res, on='customer_ID')
+
+            # TODO: 次元圧縮
+            for pca in pcas:
+                res = pca(df, phase='predict')
+                df = pd.merge(df, res, on='customer_ID')
+
+            res = svd_executer(df, phase='predict')
             df = pd.merge(df, res, on='customer_ID')
 
             # TODO: Encoding系の特徴量
-            res = freq_enc(df, phase='predict')
-            df = pd.merge(df, res, on='customer_ID')
+            # res = freq_enc(df, phase='predict')
+            # df = pd.merge(df, res, on='customer_ID')
 
             res = tar_enc(df, phase='predict')
             df = pd.merge(df, res, on='customer_ID')
@@ -193,9 +269,6 @@ def main(cfg):
 
             ids.extend(target_ids)
             preds.extend(pred)
-
-            print(len(ids))
-            print(len(preds))
 
         res = pd.DataFrame({
             'customer_ID': ids,

@@ -30,6 +30,34 @@ class GroupbyIDTransformer:
         return self.transform(df, phase)
 
 
+class GroupbyIDFuncTransformer:
+    def __init__(self, feats, funcs: dict):
+        self.feats = feats
+        self.funcs = funcs
+
+    def _unique_customer_id(self, df):
+        target_df = pd.DataFrame({
+            'customer_ID': df['customer_ID'].unique()
+        })
+
+        return target_df
+
+    def transform(self, df, phase):
+        target = self._unique_customer_id(df)
+
+        for n, func in self.funcs.items():
+            group = df.groupby('customer_ID')[self.feats].apply(func).reset_index()
+            rename_dict = {k: f"fe_group_{n}_key_ID_{k}" for k in self.feats}
+            group = group.rename(columns=rename_dict)
+
+            target = pd.merge(target, group, on='customer_ID')
+
+        return target
+
+    def __call__(self, df, phase):
+        return self.transform(df, phase)
+
+
 class NullCountPerCustomer:
     """
     ユーザーごとの特徴慮の欠損数
