@@ -14,7 +14,6 @@ prep:
   pca_n_components: 20
   svd_n_components: 20
 
-
 lgb:
   num_iteration: 100000
   objective: binary

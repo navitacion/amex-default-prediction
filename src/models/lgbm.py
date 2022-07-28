@@ -1,8 +1,8 @@
 import lightgbm as lgb
 from wandb.lightgbm import log_summary
 
-from src.utils import amex_metric
 from src.models.base import BaseModel
+from src.utils import amex_metric
 
 
 # LightGBM -----------------------------------------------------------------------------------------------
@@ -12,7 +12,7 @@ def lgbm_amex_metric(preds, data):
     y_true = data.get_label()
     score = amex_metric(y_true, preds)
 
-    return 'amex_metric', score, True
+    return "amex_metric", score, True
 
 
 class LGBMModel(BaseModel):
@@ -30,7 +30,7 @@ class LGBMModel(BaseModel):
             self.params,
             train_data,
             valid_sets=[valid_data, train_data],
-            valid_names=['eval', 'train'],
+            valid_names=["eval", "train"],
             feature_name=features,
             feval=lgbm_amex_metric,
         )
@@ -46,4 +46,4 @@ class LGBMModel(BaseModel):
         return pred
 
     def get_feature_importance(self, features, label):
-        return self.model.feature_importance(importance_type='gain')
+        return self.model.feature_importance(importance_type="gain")

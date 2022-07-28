@@ -8,9 +8,7 @@ class GroupbyIDTransformer:
         self.aggs = aggs
 
     def _unique_customer_id(self, df):
-        target_df = pd.DataFrame({
-            'customer_ID': df['customer_ID'].unique()
-        })
+        target_df = pd.DataFrame({"customer_ID": df["customer_ID"].unique()})
 
         return target_df
 
@@ -18,11 +16,11 @@ class GroupbyIDTransformer:
         target = self._unique_customer_id(df)
 
         for agg in self.aggs:
-            group = df.groupby('customer_ID')[self.feats].agg(agg).reset_index()
+            group = df.groupby("customer_ID")[self.feats].agg(agg).reset_index()
             rename_dict = {k: f"fe_group_{agg}_key_ID_{k}" for k in self.feats}
             group = group.rename(columns=rename_dict)
 
-            target = pd.merge(target, group, on='customer_ID')
+            target = pd.merge(target, group, on="customer_ID")
 
         return target
 
@@ -36,9 +34,7 @@ class GroupbyIDFuncTransformer:
         self.funcs = funcs
 
     def _unique_customer_id(self, df):
-        target_df = pd.DataFrame({
-            'customer_ID': df['customer_ID'].unique()
-        })
+        target_df = pd.DataFrame({"customer_ID": df["customer_ID"].unique()})
 
         return target_df
 
@@ -46,11 +42,11 @@ class GroupbyIDFuncTransformer:
         target = self._unique_customer_id(df)
 
         for n, func in self.funcs.items():
-            group = df.groupby('customer_ID')[self.feats].apply(func).reset_index()
+            group = df.groupby("customer_ID")[self.feats].apply(func).reset_index()
             rename_dict = {k: f"fe_group_{n}_key_ID_{k}" for k in self.feats}
             group = group.rename(columns=rename_dict)
 
-            target = pd.merge(target, group, on='customer_ID')
+            target = pd.merge(target, group, on="customer_ID")
 
         return target
 
@@ -68,17 +64,21 @@ class NullCountPerCustomer:
         self.feats = feats
 
     def transform(self, df, phase):
-        group = df.groupby('customer_ID')[self.feats].count().rsub(df.groupby('customer_ID').size(),
-                                                                   axis=0).reset_index()
+        group = (
+            df.groupby("customer_ID")[self.feats]
+            .count()
+            .rsub(df.groupby("customer_ID").size(), axis=0)
+            .reset_index()
+        )
 
-        rename_dict = {c: f'fe_nullCount_{c}' for c in self.feats}
+        rename_dict = {c: f"fe_nullCount_{c}" for c in self.feats}
         group = group.rename(columns=rename_dict)
 
         for _, v in rename_dict.items():
             group[v] = group[v].astype(np.uint8)
 
         # すべて同じ値（欠損値がない）カラムは除外
-        if phase == 'train':
+        if phase == "train":
             drop_f = []
             for c in group.columns:
                 if group[c].max() == group[c].min():
