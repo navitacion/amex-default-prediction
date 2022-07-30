@@ -14,11 +14,13 @@ class KmeansCluster:
         self.seed = seed
         self.suffix = suffix
 
+        print(suffix)
+        print("Feats Num: ", len(feats))
+
     def _prep(self, df):
-        tmp = df.copy()
         # StandardScaling
         self.scaler = StandardScaler()
-        tmp = self.scaler.fit_transform(tmp[self.feats])
+        tmp = self.scaler.fit_transform(df[self.feats])
 
         # fill na from mean value from Train data
         # 平均が欠損の場合はすべて0にする
@@ -49,8 +51,7 @@ class KmeansCluster:
 
         # Apply Prep
         customer_id = df["customer_ID"].values
-        tmp = df.copy()
-        tmp = self.scaler.transform(tmp[self.feats])
+        tmp = self.scaler.transform(df[self.feats])
         tmp = pd.DataFrame(tmp, columns=self.feats)
         tmp = tmp.fillna(self.means_from_train)
 
@@ -94,11 +95,13 @@ class PCAExecuter:
         self.seed = seed
         self.suffix = suffix
 
+        print(suffix)
+        print("Feats Num: ", len(feats))
+
     def _prep(self, df):
-        tmp = df.copy()
         # StandardScaling
         self.scaler = StandardScaler()
-        tmp = self.scaler.fit_transform(tmp[self.feats])
+        tmp = self.scaler.fit_transform(df[self.feats])
 
         # fill na from mean value from Train data
         # 平均が欠損の場合はすべて0にする
@@ -163,11 +166,13 @@ class SVDExecuter:
         self.seed = seed
         self.suffix = suffix
 
+        print(suffix)
+        print("Feats Num: ", len(feats))
+
     def _prep(self, df):
-        tmp = df.copy()
         # StandardScaling
         self.scaler = StandardScaler()
-        tmp = self.scaler.fit_transform(tmp[self.feats])
+        tmp = self.scaler.fit_transform(df[self.feats])
 
         # fill na from mean value from Train data
         # 平均が欠損の場合はすべて0にする

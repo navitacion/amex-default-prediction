@@ -1,3 +1,5 @@
+import gc
+
 import numpy as np
 import pandas as pd
 
@@ -21,6 +23,9 @@ class GroupbyIDTransformer:
             group = group.rename(columns=rename_dict)
 
             target = pd.merge(target, group, on="customer_ID")
+
+            del group
+            gc.collect()
 
         return target
 
@@ -47,6 +52,9 @@ class GroupbyIDFuncTransformer:
             group = group.rename(columns=rename_dict)
 
             target = pd.merge(target, group, on="customer_ID")
+
+            del group
+            gc.collect()
 
         return target
 

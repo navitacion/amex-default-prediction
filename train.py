@@ -1,6 +1,7 @@
 import gc
 import os
 import pickle
+import re
 import shutil
 import time
 import warnings
@@ -10,11 +11,11 @@ from pathlib import Path
 import hydra
 import numpy as np
 import pandas as pd
-import wandb
 import yaml
 from dotenv import load_dotenv
 from tqdm import tqdm
 
+import wandb
 from src.constant import CAT_FEATURES, DATE_FEATURES, DROP_FEATURES
 from src.data import DataAsset
 from src.features.base import generate_features
@@ -86,19 +87,19 @@ def main(cfg):
 
     # groupby func
     funcs = {
-        # 'minmaxdiff': lambda x: x.max() - x.min(),
+        # "minmaxdiff": lambda x: x.max() - x.min(),
         "quantile_75": lambda x: x.quantile(0.75),
         "quantile_25": lambda x: x.quantile(0.25),
     }
 
     transformers = [
         GroupbyIDTransformer(cnt_features, aggs=["min", "max", "std", "mean", "last"]),
-        GroupbyIDFuncTransformer(cnt_features, funcs=funcs),
+        # GroupbyIDFuncTransformer(cnt_features, funcs=funcs),
         GroupbyIDTransformer(CAT_FEATURES, aggs=["last"]),
         TransactionDays(aggs=["max", "mean", "std"]),
         RecentDiff(cnt_features, interval=1),
-        # RecentDiff(cnt_features, interval=2),
-        # RecentDiff(cnt_features, interval=3),
+        RecentDiff(cnt_features, interval=2),
+        RecentDiff(cnt_features, interval=3),
         RollingMean(cnt_features, window=1),
         RollingMean(cnt_features, window=3),
         RollingMean(cnt_features, window=6),
@@ -132,38 +133,26 @@ def main(cfg):
     # TODO: Kmeans系の特徴量
     # KMeans  ------------
     logger.info("Kmeans Features")
-    kmeans_prep_all = KmeansCluster(
-        feats=None,
-        n_clusters=cfg.prep.kmean_n_cluster,
-        seed=cfg.data.seed,
-        suffix="all",
-    )
-    res = kmeans_prep_all(df, phase="train")
-    df = pd.merge(df, res, on="customer_ID")
+    kmeans = []
+    for s in ["B", "D", "P", "S", "R"]:
+        kmeans_prep = KmeansCluster(
+            feats=[c for c in df.columns if f"_{s}_" in c],
+            n_clusters=cfg.prep.kmean_n_cluster,
+            seed=cfg.data.seed,
+            suffix=s,
+        )
+        res = kmeans_prep(df, phase="train")
+        df = pd.merge(df, res, on="customer_ID")
+        kmeans.append(kmeans_prep)
+
     logger.info(f"Data Shape {df.shape}")
 
     # 次元圧縮  ------------
-    decomposing_feats = [
-        c
-        for c in df.select_dtypes(exclude=[object, "category"]).columns
-        if c.startswith("fe")
-    ]
     # PCA
     logger.info("PCA Features")
-    pca_executer = PCAExecuter(
-        feats=decomposing_feats,
-        n_components=cfg.prep.pca_n_components,
-        seed=cfg.data.seed,
-        suffix="all",
-    )
-    res = pca_executer(df, phase="train")
-    df = pd.merge(df, res, on="customer_ID")
+    pcas = []
 
-    # Each Feature
-    # R featureが最も重要度が高く他はそうでもなさそう
-    pcas = [pca_executer]
-
-    for s in ["D", "R"]:
+    for s in ["B", "D", "P", "S", "R"]:
         pca_prep = PCAExecuter(
             feats=[c for c in df.columns if f"_{s}_" in c],
             n_components=cfg.prep.pca_n_components,
@@ -178,15 +167,18 @@ def main(cfg):
 
     # SVD
     logger.info("SVD Features")
-    svd_executer = SVDExecuter(
-        feats=decomposing_feats,
-        n_components=cfg.prep.svd_n_components,
-        seed=cfg.data.seed,
-        suffix="all",
-    )
+    svds = []
 
-    res = svd_executer(df, phase="train")
-    df = pd.merge(df, res, on="customer_ID")
+    for s in ["B", "D", "P", "S", "R"]:
+        svd_prep = SVDExecuter(
+            feats=[c for c in df.columns if f"_{s}_" in c],
+            n_components=cfg.prep.svd_n_components,
+            seed=cfg.data.seed,
+            suffix=s,
+        )
+        res = svd_prep(df, phase="train")
+        df = pd.merge(df, res, on="customer_ID")
+        svds.append(svd_prep)
 
     logger.info(f"Data Shape {df.shape}")
 
@@ -211,7 +203,6 @@ def main(cfg):
     df = pd.merge(df, res, on="customer_ID")
     logger.info(f"Data Shape {df.shape}")
 
-    logger.info(f"Train Data Shape: {df.shape}")
     df = reduce_mem_usage(df)
 
     del label, res
@@ -224,9 +215,22 @@ def main(cfg):
     wandb.save(filename)
 
     # Training  ----------------------------------------------------------
+    # Extract Features for training model
+    filter_pattern = re.compile(r"tar|kmeans|pca|svd|transaction")
+    train_feats = [c for c in df.columns if bool(filter_pattern.search(c))]
+    train_feats.remove("target")
+
+    print(train_feats)
+
     # Set Trainer Class
     trainer = Trainer(
-        model, cfg, id_col="customer_ID", tar_col="target", criterion=amex_metric
+        model,
+        cfg,
+        id_col="customer_ID",
+        tar_col="target",
+        criterion=amex_metric,
+        features=train_feats,
+        logger=logger,
     )
 
     # Train
@@ -248,16 +252,20 @@ def main(cfg):
             df = generate_features(df, transformers, logger=None, phase="predict")
 
             # TODO: KMeans系の特徴量
-            res = kmeans_prep_all(df, phase="predict")
-            df = pd.merge(df, res, on="customer_ID")
+            # res = kmeans_prep_all(df, phase="predict")
+            # df = pd.merge(df, res, on="customer_ID")
+            for kmean in kmeans:
+                res = kmean(df, phase="predict")
+                df = pd.merge(df, res, on="customer_ID")
 
             # TODO: 次元圧縮
             for pca in pcas:
                 res = pca(df, phase="predict")
                 df = pd.merge(df, res, on="customer_ID")
 
-            res = svd_executer(df, phase="predict")
-            df = pd.merge(df, res, on="customer_ID")
+            for svd in svds:
+                res = svd(df, phase="predict")
+                df = pd.merge(df, res, on="customer_ID")
 
             # TODO: Encoding系の特徴量
             # res = freq_enc(df, phase='predict')

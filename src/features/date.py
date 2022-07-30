@@ -60,7 +60,6 @@ class RecentDiff:
     """
     直近の値の差分
     interval = 1  各特徴量の最近の値とその一つ前の値の差分
-
     """
 
     def __init__(self, feats: list, interval: int):
