@@ -64,14 +64,6 @@ class GroupbyIDLastDiffTransformer:
             group_last_sub = group_last_sub.rename(columns=rename_dict)
             target = pd.merge(target, group_last_sub, on="customer_ID")
 
-        # Div
-        # for name, group in groups.items():
-        #     group_last_div = group_last / group
-        #     group_last_div = group_last_div.reset_index()
-        #     rename_dict = {k: f"fe_group_key_ID_last{name}_div_{k}" for k in self.feats}
-        #     group_last_div = group_last_div.rename(columns=rename_dict)
-        #     target = pd.merge(target, group_last_div, on="customer_ID")
-
         return target
 
     def __call__(self, df, phase):
@@ -110,7 +102,6 @@ class GroupbyIDFuncTransformer:
 class NullCountPerCustomer:
     """
     ユーザーごとの特徴慮の欠損数
-
     """
 
     def __init__(self, feats: list):
