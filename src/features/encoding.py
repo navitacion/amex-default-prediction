@@ -1,3 +1,5 @@
+import gc
+
 import numpy as np
 import pandas as pd
 
@@ -61,6 +63,9 @@ class TargetEncoder:
             enc_dict = {k: v for k, v in zip(group[c], group["target_enc"])}
 
             self.enc_dict.update({c: enc_dict})
+
+            del group, enc_dict
+            gc.collect()
 
     def transform(self, df, phase):
         if phase == "train":

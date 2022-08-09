@@ -1,5 +1,9 @@
+import gc
+
 import numpy as np
 import pandas as pd
+from sklearn.feature_selection import SelectFromModel
+from sklearn.linear_model import Lasso, Ridge
 
 
 def reduce_mem_usage(df):
@@ -83,3 +87,34 @@ def amex_metric(y_true: np.array, y_pred: np.array) -> float:
     d = top_four_percent_captured(y_true, y_pred)
 
     return 0.5 * (g + d)
+
+
+def feature_selection(df, sample_frac=1.0, seed=0):
+    # Null Rate
+    nulls = df.isnull().sum() / len(df)
+
+    nulls = nulls[nulls < 0.5].index.tolist()
+    nulls = [c for c in nulls if c.startswith("fe_")]
+
+    # 欠損値がない場合
+    # Ridge回帰による特徴量選定
+    tmp = df.dropna(axis=1, how="any")
+    feats = [c for c in tmp.columns if c.startswith("fe_")]
+
+    sampled = df.sample(frac=sample_frac, random_state=seed)
+
+    clf = Lasso()
+
+    sfm = SelectFromModel(clf)
+    sfm.fit(sampled[feats], sampled["target"])
+
+    del sampled
+    gc.collect()
+
+    selected_feats = np.array(feats)[sfm.get_support()].tolist()
+
+    selected_feats = selected_feats + nulls
+
+    selected_feats = list(set(selected_feats))
+
+    return selected_feats

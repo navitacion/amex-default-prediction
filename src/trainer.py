@@ -1,3 +1,4 @@
+import gc
 import os
 import pickle
 import time
@@ -8,13 +9,13 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
 import wandb
+from src.models import CBModel, LGBMModel
 
 
 class Trainer:
     def __init__(
-        self, model, cfg, id_col: str, tar_col: str, criterion, logger, features=None
+        self, cfg, id_col: str, tar_col: str, criterion, logger, features=None
     ):
-        self.model = model
         self.cfg = cfg
         self.features = features
         self.id_col = id_col
@@ -53,7 +54,7 @@ class Trainer:
         ]
 
         # Extract Features, label, Id
-        data = df[self.features]
+        data = df[self.features].values
         label = df[self.tar_col].values
         ids = df[self.id_col].values
 
@@ -73,11 +74,23 @@ class Trainer:
 
         # Cross Validation Score
         for i, (trn_idx, val_idx) in enumerate(self.cv.split(data, label)):
+
+            # Model init
+            # LightGBM
+            if self.cfg.train.model_type == "lgb":
+                model = LGBMModel(dict(self.cfg.lgb))
+
+            # CatBoost
+            elif self.cfg.train.model_type == "catboost":
+                model = CBModel(dict(self.cfg.catboost))
+            else:
+                raise (TypeError)
+
             # Train
-            oof = self.model.train(
-                x_train=data.iloc[trn_idx],
+            oof = model.train(
+                x_train=data[trn_idx],
                 y_train=label[trn_idx],
-                x_val=data.iloc[val_idx],
+                x_val=data[val_idx],
                 y_val=label[val_idx],
                 features=self.features,
                 cat_features=self.cat_features,
@@ -91,7 +104,10 @@ class Trainer:
             print(f"Fold {i}  Score: {score:.3f}")
             preds[val_idx] = oof
             oof_label[val_idx] = label[val_idx]
-            self.models.append(self.model)
+            self.models.append(model)
+
+            del model
+            gc.collect()
 
         # All Fold Score
         oof_score = self.criterion(oof_label, preds)

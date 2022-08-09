@@ -1,8 +1,8 @@
 import gc
 import os
 import pickle
-import re
 import shutil
+import sys
 import time
 import warnings
 from logging import config, getLogger
@@ -26,16 +26,17 @@ from src.features.date import (
     RecentPayDateDiffBeforePay,
     RollingMean,
     TransactionDays,
+    TransactionRollingDays,
 )
 from src.features.encoding import FrequencyEncoder, TargetEncoder
 from src.features.groupby import (
     GroupbyIDFuncTransformer,
+    GroupbyIDLastDiffTransformer,
     GroupbyIDTransformer,
     NullCountPerCustomer,
 )
-from src.models import CBModel, LGBMModel
 from src.trainer import Trainer
-from src.utils import amex_metric, reduce_mem_usage
+from src.utils import amex_metric, feature_selection, reduce_mem_usage
 
 pd.options.display.max_rows = None
 pd.options.display.max_columns = None
@@ -53,6 +54,9 @@ def main(cfg):
         pass
 
     os.makedirs(cfg.data.asset_dir, exist_ok=True)
+
+    # Overload Categorical Features from config
+    cat_features = [c for c in CAT_FEATURES if c not in DROP_FEATURES]
 
     # Logger  --------------------------------------------------
     load_dotenv(".env")
@@ -82,42 +86,51 @@ def main(cfg):
     cnt_features = [
         f
         for f in t.columns
-        if f not in CAT_FEATURES + DATE_FEATURES + DROP_FEATURES + ["customer_ID"]
+        if f not in cat_features + DATE_FEATURES + DROP_FEATURES + ["customer_ID"]
     ]
 
+    del t
+    gc.collect()
+
     # groupby func
-    funcs = {
-        # "minmaxdiff": lambda x: x.max() - x.min(),
-        "quantile_75": lambda x: x.quantile(0.75),
-        "quantile_25": lambda x: x.quantile(0.25),
-    }
+    # funcs = {
+    #     # "minmaxdiff": lambda x: x.max() - x.min(),
+    #     "quantile_75": lambda x: x.quantile(0.75),
+    #     "quantile_25": lambda x: x.quantile(0.25),
+    # }
 
     transformers = [
-        GroupbyIDTransformer(cnt_features, aggs=["min", "max", "std", "mean", "last"]),
+        GroupbyIDTransformer(
+            cnt_features, aggs=["first", "min", "max", "std", "mean", "last"]
+        ),
         # GroupbyIDFuncTransformer(cnt_features, funcs=funcs),
-        GroupbyIDTransformer(CAT_FEATURES, aggs=["last"]),
-        TransactionDays(aggs=["max", "mean", "std"]),
+        GroupbyIDLastDiffTransformer(cnt_features),
+        GroupbyIDTransformer(cat_features, aggs=["last", "count", "first"]),
+        TransactionDays(aggs=["max", "min", "mean", "std"]),
+        TransactionRollingDays(aggs=["max", "min", "mean", "std"], window=2),
+        TransactionRollingDays(aggs=["max", "min", "mean", "std"], window=3),
+        TransactionRollingDays(aggs=["max", "min", "mean", "std"], window=4),
         RecentDiff(cnt_features, interval=1),
-        RecentDiff(cnt_features, interval=2),
-        RecentDiff(cnt_features, interval=3),
-        RollingMean(cnt_features, window=1),
-        RollingMean(cnt_features, window=3),
-        RollingMean(cnt_features, window=6),
-        RecentPayDateDiffBeforePay(),
+        # RecentDiff(cnt_features, interval=2),
+        # RecentDiff(cnt_features, interval=3),
+        # RollingMean(cnt_features, window=1),
+        # RollingMean(cnt_features, window=2),
+        # RollingMean(cnt_features, window=3),
+        RecentPayDateDiffBeforePay(recent_term=1),
+        RecentPayDateDiffBeforePay(recent_term=2),
+        RecentPayDateDiffBeforePay(recent_term=3),
         # CountTransaction(),  # 特徴量重要度が0
-        # NullCountPerCustomer(cnt_features + CAT_FEATURES),
+        # NullCountPerCustomer(cnt_features + cat_features),
     ]
 
     # Model  ---------------------------------------------------
     # LightGBM
     if cfg.train.model_type == "lgb":
         wandb.config.update(dict(cfg.lgb))
-        model = LGBMModel(dict(cfg.lgb))
 
     # CatBoost
     elif cfg.train.model_type == "catboost":
         wandb.config.update(dict(cfg.catboost))
-        model = CBModel(dict(cfg.catboost))
     else:
         raise (TypeError)
 
@@ -127,60 +140,65 @@ def main(cfg):
     # Calc Features
     dfs = []
     for df in tqdm(asset.train_generator(), total=cfg.train.chunk_size):
-        dfs.append(generate_features(df, transformers, logger, phase="train"))
+        dfs.append(
+            generate_features(df, transformers, cat_features, logger, phase="train")
+        )
     df = pd.concat(dfs, axis=0, ignore_index=True)
+
+    del dfs
+    gc.collect()
 
     # TODO: Kmeans系の特徴量
     # KMeans  ------------
-    logger.info("Kmeans Features")
-    kmeans = []
-    for s in ["B", "D", "P", "S", "R"]:
-        kmeans_prep = KmeansCluster(
-            feats=[c for c in df.columns if f"_{s}_" in c],
-            n_clusters=cfg.prep.kmean_n_cluster,
-            seed=cfg.data.seed,
-            suffix=s,
-        )
-        res = kmeans_prep(df, phase="train")
-        df = pd.merge(df, res, on="customer_ID")
-        kmeans.append(kmeans_prep)
-
-    logger.info(f"Data Shape {df.shape}")
+    # logger.info("Kmeans Features")
+    # kmeans = []
+    # for s in ["B", "D", "P", "S", "R"]:
+    #     kmeans_prep = KmeansCluster(
+    #         feats=[c for c in df.columns if f"_{s}_" in c],
+    #         n_clusters=cfg.prep.kmean_n_cluster,
+    #         seed=cfg.data.seed,
+    #         suffix=s,
+    #     )
+    #     res = kmeans_prep(df, phase="train")
+    #     df = pd.merge(df, res, on="customer_ID")
+    #     kmeans.append(kmeans_prep)
+    #
+    # logger.info(f"Data Shape {df.shape}")
 
     # 次元圧縮  ------------
     # PCA
-    logger.info("PCA Features")
-    pcas = []
-
-    for s in ["B", "D", "P", "S", "R"]:
-        pca_prep = PCAExecuter(
-            feats=[c for c in df.columns if f"_{s}_" in c],
-            n_components=cfg.prep.pca_n_components,
-            seed=cfg.data.seed,
-            suffix=s,
-        )
-        res = pca_prep(df, phase="train")
-        df = pd.merge(df, res, on="customer_ID")
-        pcas.append(pca_prep)
-
-    logger.info(f"Data Shape {df.shape}")
+    # logger.info("PCA Features")
+    # pcas = []
+    #
+    # for s in ["B", "D", "P", "S", "R"]:
+    #     pca_prep = PCAExecuter(
+    #         feats=[c for c in df.columns if f"_{s}_" in c],
+    #         n_components=cfg.prep.pca_n_components,
+    #         seed=cfg.data.seed,
+    #         suffix=s,
+    #     )
+    #     res = pca_prep(df, phase="train")
+    #     df = pd.merge(df, res, on="customer_ID")
+    #     pcas.append(pca_prep)
+    #
+    # logger.info(f"Data Shape {df.shape}")
 
     # SVD
-    logger.info("SVD Features")
-    svds = []
-
-    for s in ["B", "D", "P", "S", "R"]:
-        svd_prep = SVDExecuter(
-            feats=[c for c in df.columns if f"_{s}_" in c],
-            n_components=cfg.prep.svd_n_components,
-            seed=cfg.data.seed,
-            suffix=s,
-        )
-        res = svd_prep(df, phase="train")
-        df = pd.merge(df, res, on="customer_ID")
-        svds.append(svd_prep)
-
-    logger.info(f"Data Shape {df.shape}")
+    # logger.info("SVD Features")
+    # svds = []
+    #
+    # for s in ["B", "D", "P", "S", "R"]:
+    #     svd_prep = SVDExecuter(
+    #         feats=[c for c in df.columns if f"_{s}_" in c],
+    #         n_components=cfg.prep.svd_n_components,
+    #         seed=cfg.data.seed,
+    #         suffix=s,
+    #     )
+    #     res = svd_prep(df, phase="train")
+    #     df = pd.merge(df, res, on="customer_ID")
+    #     svds.append(svd_prep)
+    #
+    # logger.info(f"Data Shape {df.shape}")
 
     # Add label
     label = pd.read_csv(Path(cfg.data.data_dir).joinpath("train_labels.csv"))
@@ -188,7 +206,7 @@ def main(cfg):
 
     # TODO: encoding系
     # categoryとint型の変数を対象
-    tar_cols = df.select_dtypes(include=[np.int8, np.int16, "category"]).columns
+    tar_cols = df.select_dtypes(include=["category"]).columns
 
     # Frequency Encoding
     # そこまで重要度高くない
@@ -215,28 +233,25 @@ def main(cfg):
     wandb.save(filename)
 
     # Training  ----------------------------------------------------------
-    # Extract Features for training model
-    filter_pattern = re.compile(r"tar|kmeans|pca|svd|transaction")
-    train_feats = [c for c in df.columns if bool(filter_pattern.search(c))]
-    train_feats.remove("target")
-
-    print(train_feats)
+    # Feature Selection by Ridge
+    logger.info("Feature Selection")
+    input_features = feature_selection(df, sample_frac=0.5)
+    logger.info(f"Using Feature Num: {len(input_features)}")
 
     # Set Trainer Class
     trainer = Trainer(
-        model,
         cfg,
         id_col="customer_ID",
         tar_col="target",
         criterion=amex_metric,
-        features=train_feats,
+        features=input_features,
         logger=logger,
     )
 
     # Train
     models = trainer.fit(df)
 
-    del df, model, trainer
+    del df, trainer
     gc.collect()
 
     # Inference  -----------------------------------------------
@@ -249,23 +264,23 @@ def main(cfg):
         ):
 
             # Feature Engineering  ------------------------------
-            df = generate_features(df, transformers, logger=None, phase="predict")
+            df = generate_features(
+                df, transformers, cat_features, logger=None, phase="predict"
+            )
 
             # TODO: KMeans系の特徴量
-            # res = kmeans_prep_all(df, phase="predict")
-            # df = pd.merge(df, res, on="customer_ID")
-            for kmean in kmeans:
-                res = kmean(df, phase="predict")
-                df = pd.merge(df, res, on="customer_ID")
+            # for kmean in kmeans:
+            #     res = kmean(df, phase="predict")
+            #     df = pd.merge(df, res, on="customer_ID")
 
             # TODO: 次元圧縮
-            for pca in pcas:
-                res = pca(df, phase="predict")
-                df = pd.merge(df, res, on="customer_ID")
+            # for pca in pcas:
+            #     res = pca(df, phase="predict")
+            #     df = pd.merge(df, res, on="customer_ID")
 
-            for svd in svds:
-                res = svd(df, phase="predict")
-                df = pd.merge(df, res, on="customer_ID")
+            # for svd in svds:
+            #     res = svd(df, phase="predict")
+            #     df = pd.merge(df, res, on="customer_ID")
 
             # TODO: Encoding系の特徴量
             # res = freq_enc(df, phase='predict')

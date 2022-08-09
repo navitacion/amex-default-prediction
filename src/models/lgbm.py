@@ -29,10 +29,11 @@ class LGBMModel(BaseModel):
         self.model = lgb.train(
             self.params,
             train_data,
-            valid_sets=[valid_data, train_data],
-            valid_names=["eval", "train"],
+            valid_sets=[valid_data],
+            valid_names=["eval"],
             feature_name=features,
             feval=lgbm_amex_metric,
+            verbose_eval=500,
         )
 
         log_summary(self.model, save_model_checkpoint=True)

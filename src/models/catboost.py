@@ -68,6 +68,7 @@ class CBModel(BaseModel):
     def get_feature_importance(self, features, label):
         # Ref: https://github.com/catboost/catboost/blob/master/catboost/python-package/catboost/core.py#L209-L223
         # Ref: https://catboost.ai/en/docs/concepts/cli-reference_fstr-calc#description
+        features = pd.DataFrame(features, columns=self.features)
         features_pool = Pool(features, label, cat_features=self.cat_features)
 
         return self.model.get_feature_importance(

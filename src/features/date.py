@@ -56,6 +56,42 @@ class TransactionDays:
         return self.transform(df, phase)
 
 
+class TransactionRollingDays:
+    def __init__(self, aggs: list, window: int):
+        """
+        customer_IDごとの取引日(S_2)の日数のStats
+        customer_IDごとに取引日の期間にフォーカスしたもの
+        移動平均を計算する
+        """
+        self.aggs = aggs
+        self.window = window
+
+    def transform(self, df, phase):
+        df["S_2"] = pd.to_datetime(df["S_2"])
+
+        df["tmp"] = df.groupby("customer_ID")["S_2"].diff()
+        df["tmp"] = df["tmp"].apply(lambda x: x.days)
+
+        df["tmp2"] = (
+            df.groupby("customer_ID")
+            .rolling(self.window)[["tmp"]]
+            .mean()
+            .reset_index()["tmp"]
+        )
+
+        group = df.groupby("customer_ID")["tmp2"].agg(self.aggs).reset_index()
+
+        rename_dict = {
+            k: f"fe_transaction_days_rolling_{self.window}_{k}" for k in self.aggs
+        }
+        group = group.rename(columns=rename_dict)
+
+        return group
+
+    def __call__(self, df, phase):
+        return self.transform(df, phase)
+
+
 class RecentDiff:
     """
     直近の値の差分
@@ -133,11 +169,13 @@ class RollingMean:
 class RecentPayDateDiffBeforePay:
     """
     最新の取引から直前までの取引までの差分
+    recent_term: 1 = 最新の取引からその直前までの取引までの日数
+    recent_term: 2 = 最新の2番目から3番目までの取引の日数
 
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, recent_term=1):
+        self.recent_term = recent_term
 
     def transform(self, df, phase):
         _df = df[["customer_ID", "S_2"]].copy()
@@ -145,7 +183,7 @@ class RecentPayDateDiffBeforePay:
 
         _df = cudf.from_pandas(_df)
 
-        feat_name = "fe_recentPayDiffBeforePay"
+        feat_name = f"fe_recentPayDiffBeforePay_recent_{self.recent_term}"
         _df[feat_name] = _df.groupby("customer_ID")["S_2"].diff()
 
         _df = _df.to_pandas()
@@ -153,7 +191,7 @@ class RecentPayDateDiffBeforePay:
         _df[feat_name] = _df[feat_name].apply(lambda x: x.days)
 
         # 最新の日付の差分を取る
-        _df = _df.groupby("customer_ID").tail(1).reset_index(drop=True)
+        _df = _df.groupby("customer_ID").nth(-self.recent_term).reset_index()
         _df = _df[["customer_ID", feat_name]]
 
         return _df

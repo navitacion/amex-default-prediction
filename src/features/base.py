@@ -2,15 +2,16 @@ import gc
 
 import pandas as pd
 
-from src.constant import CAT_FEATURES
 from src.utils import reduce_mem_usage
 
 
-def generate_features(features_df, transformers, logger=None, phase="train"):
+def generate_features(
+    features_df, transformers, cat_features, logger=None, phase="train"
+):
     if logger is not None:
         logger.info("generate features")
 
-    for c in CAT_FEATURES:
+    for c in cat_features:
         features_df[c] = features_df[c].astype("category")
 
     # Sort ID, S_2
