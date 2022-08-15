@@ -29,8 +29,8 @@ class LGBMModel(BaseModel):
         self.model = lgb.train(
             self.params,
             train_data,
-            valid_sets=[valid_data],
-            valid_names=["eval"],
+            valid_sets=[valid_data, train_data],
+            valid_names=["eval", "train"],
             feature_name=features,
             feval=lgbm_amex_metric,
             verbose_eval=500,

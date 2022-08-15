@@ -32,11 +32,17 @@ from src.features.encoding import FrequencyEncoder, TargetEncoder
 from src.features.groupby import (
     GroupbyIDFuncTransformer,
     GroupbyIDLastDiffTransformer,
+    GroupbyIDLastDivTransformer,
     GroupbyIDTransformer,
     NullCountPerCustomer,
 )
 from src.trainer import Trainer
-from src.utils import amex_metric, feature_selection, reduce_mem_usage
+from src.utils import (
+    amex_metric,
+    feature_selection,
+    feature_selection_lgb,
+    reduce_mem_usage,
+)
 
 pd.options.display.max_rows = None
 pd.options.display.max_columns = None
@@ -100,21 +106,24 @@ def main(cfg):
     # }
 
     transformers = [
-        GroupbyIDTransformer(
-            cnt_features, aggs=["first", "min", "max", "std", "mean", "last"]
-        ),
+        GroupbyIDTransformer(cnt_features, aggs=["std", "mean", "last"]),
         # GroupbyIDFuncTransformer(cnt_features, funcs=funcs),
-        GroupbyIDLastDiffTransformer(cnt_features),
-        GroupbyIDTransformer(cat_features, aggs=["last", "count", "first"]),
+        GroupbyIDLastDiffTransformer(
+            cnt_features, aggs=["min", "max", "std", "mean", "first"]
+        ),
+        GroupbyIDLastDivTransformer(
+            cnt_features, aggs=["min", "max", "std", "mean", "first"]
+        ),
+        GroupbyIDTransformer(cat_features, aggs=["last"]),
         TransactionDays(aggs=["max", "min", "mean", "std"]),
         TransactionRollingDays(aggs=["max", "min", "mean", "std"], window=2),
         TransactionRollingDays(aggs=["max", "min", "mean", "std"], window=3),
         TransactionRollingDays(aggs=["max", "min", "mean", "std"], window=4),
-        RecentDiff(cnt_features, interval=1),
+        # RecentDiff(cnt_features, interval=1),
         # RecentDiff(cnt_features, interval=2),
         # RecentDiff(cnt_features, interval=3),
         # RollingMean(cnt_features, window=1),
-        # RollingMean(cnt_features, window=2),
+        RollingMean(cnt_features, window=2),
         # RollingMean(cnt_features, window=3),
         RecentPayDateDiffBeforePay(recent_term=1),
         RecentPayDateDiffBeforePay(recent_term=2),
@@ -126,10 +135,12 @@ def main(cfg):
     # Model  ---------------------------------------------------
     # LightGBM
     if cfg.train.model_type == "lgb":
+        cfg.lgb.random_state = cfg.data.seed
         wandb.config.update(dict(cfg.lgb))
 
     # CatBoost
     elif cfg.train.model_type == "catboost":
+        cfg.catboost.random_state = cfg.data.seed
         wandb.config.update(dict(cfg.catboost))
     else:
         raise (TypeError)
@@ -150,20 +161,27 @@ def main(cfg):
 
     # TODO: Kmeans系の特徴量
     # KMeans  ------------
-    # logger.info("Kmeans Features")
-    # kmeans = []
-    # for s in ["B", "D", "P", "S", "R"]:
-    #     kmeans_prep = KmeansCluster(
-    #         feats=[c for c in df.columns if f"_{s}_" in c],
-    #         n_clusters=cfg.prep.kmean_n_cluster,
-    #         seed=cfg.data.seed,
-    #         suffix=s,
-    #     )
-    #     res = kmeans_prep(df, phase="train")
-    #     df = pd.merge(df, res, on="customer_ID")
-    #     kmeans.append(kmeans_prep)
-    #
-    # logger.info(f"Data Shape {df.shape}")
+    logger.info("Kmeans Features")
+    kmeans = []
+    for s in ["B", "D", "P", "S", "R"]:
+
+        feats = [c for c in df.columns if f"key_ID_{s}_" in c]
+        # feats = [c for c in df.columns if f"group_last_key_ID_{s}_" in c]
+
+        if len(feats) < cfg.prep.kmean_n_cluster:
+            continue
+        else:
+            kmeans_prep = KmeansCluster(
+                feats=feats,
+                n_clusters=cfg.prep.kmean_n_cluster,
+                seed=cfg.data.seed,
+                suffix=s,
+            )
+            res = kmeans_prep(df, phase="train")
+            df = pd.merge(df, res, on="customer_ID")
+            kmeans.append(kmeans_prep)
+
+    logger.info(f"Data Shape {df.shape}")
 
     # 次元圧縮  ------------
     # PCA
@@ -206,7 +224,7 @@ def main(cfg):
 
     # TODO: encoding系
     # categoryとint型の変数を対象
-    tar_cols = df.select_dtypes(include=["category"]).columns
+    tar_cols = df.select_dtypes(include=[np.int8, np.int16, "category"]).columns
 
     # Frequency Encoding
     # そこまで重要度高くない
@@ -235,7 +253,10 @@ def main(cfg):
     # Training  ----------------------------------------------------------
     # Feature Selection by Ridge
     logger.info("Feature Selection")
-    input_features = feature_selection(df, sample_frac=0.5)
+    # input_features = feature_selection(df, sample_frac=1.0)
+    input_features = feature_selection_lgb(
+        df, sample_frac=0.5, num_features=2000, seed=cfg.data.seed
+    )
     logger.info(f"Using Feature Num: {len(input_features)}")
 
     # Set Trainer Class
@@ -269,9 +290,9 @@ def main(cfg):
             )
 
             # TODO: KMeans系の特徴量
-            # for kmean in kmeans:
-            #     res = kmean(df, phase="predict")
-            #     df = pd.merge(df, res, on="customer_ID")
+            for kmean in kmeans:
+                res = kmean(df, phase="predict")
+                df = pd.merge(df, res, on="customer_ID")
 
             # TODO: 次元圧縮
             # for pca in pcas:

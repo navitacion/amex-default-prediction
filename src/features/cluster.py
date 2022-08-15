@@ -33,19 +33,10 @@ class KmeansCluster:
         self.kmeans = KMeans(n_clusters=self.n_clusters, random_state=self.seed)
         self.kmeans.fit(tmp)
 
-        del tmp
+        del tmp, means
         gc.collect()
 
     def transform(self, df, phase):
-        if self.feats is None:
-            self.feats = [
-                c
-                for c in df.select_dtypes(exclude=[object, "category"]).columns
-                if c.startswith("fe")
-            ]
-        else:
-            pass
-
         if phase == "train":
             self._prep(df)
 

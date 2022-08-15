@@ -1,5 +1,6 @@
 import gc
 
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
 from sklearn.feature_selection import SelectFromModel
@@ -118,3 +119,34 @@ def feature_selection(df, sample_frac=1.0, seed=0):
     selected_feats = list(set(selected_feats))
 
     return selected_feats
+
+
+def feature_selection_lgb(df, sample_frac=0.5, num_features=1000, seed=0):
+    features = [c for c in df.columns if c.startswith("fe_")]
+
+    sampled = df.sample(frac=sample_frac, random_state=seed).reset_index(drop=True)
+
+    train_data = lgb.Dataset(sampled[features].values, label=sampled["target"].values)
+
+    params = {
+        "objective": "binary",
+        "metric": "auc",
+        "boosting": "gbdt",
+        "num_iteration": 10000,
+        "random_state": seed,
+    }
+
+    model = lgb.train(params, train_data, verbose_eval=1000)
+
+    feat_imp_df = pd.DataFrame(
+        {
+            "feature": features,
+            "importance": model.feature_importance(importance_type="gain"),
+        }
+    )
+
+    feat_imp_df = feat_imp_df.sort_values(by="importance", ascending=False)
+
+    top_k_feats = feat_imp_df.head(num_features)["feature"].values.tolist()
+
+    return top_k_feats
