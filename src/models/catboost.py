@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-
 from catboost import CatBoostClassifier, EFstrType, Pool
 
 from src.models.base import BaseModel
@@ -35,38 +34,44 @@ class CBAmexMetric(object):
 
 
 class CBModel(BaseModel):
-    def __init__(self, params, cat_features):
+    def __init__(self, params):
         super(CBModel, self).__init__(params)
-        self.params['eval_metric'] = CBAmexMetric()
-        self.cat_features = cat_features
+        self.params["eval_metric"] = CBAmexMetric()
 
     def train(
-            self,
-            x_train: pd.DataFrame,
-            y_train: pd.DataFrame,
-            x_val: pd.DataFrame,
-            y_val: pd.DataFrame,
-            features: list) -> pd.DataFrame:
+        self,
+        x_train: pd.DataFrame,
+        y_train: pd.DataFrame,
+        x_val: pd.DataFrame,
+        y_val: pd.DataFrame,
+        features: list,
+        cat_features: list,
+    ) -> pd.DataFrame:
         self.model = None
         self.features = features
+        # TODO: Set Categorical Features
+        self.cat_features = None
 
         train_data = Pool(x_train, y_train, cat_features=self.cat_features)
         val_data = Pool(x_val, y_val, cat_features=self.cat_features)
 
         self.model = CatBoostClassifier(**self.params)
-        self.model.fit(train_data, eval_set=val_data, verbose=100)
+        self.model.fit(train_data, eval_set=val_data, verbose=500)
 
-        oof = self.model.predict(x_val, prediction_type='Probability')[:, 1]
+        oof = self.model.predict(x_val, prediction_type="Probability")[:, 1]
 
         return oof
 
     def predict(self, x_test):
-        pred = self.model.predict(x_test, prediction_type='Probability')[:, 1]
+        pred = self.model.predict(x_test, prediction_type="Probability")[:, 1]
         return pred
 
     def get_feature_importance(self, features, label):
         # Ref: https://github.com/catboost/catboost/blob/master/catboost/python-package/catboost/core.py#L209-L223
         # Ref: https://catboost.ai/en/docs/concepts/cli-reference_fstr-calc#description
+        features = pd.DataFrame(features, columns=self.features)
         features_pool = Pool(features, label, cat_features=self.cat_features)
 
-        return self.model.get_feature_importance(features_pool, type=EFstrType.LossFunctionChange)
+        return self.model.get_feature_importance(
+            features_pool, type=EFstrType.LossFunctionChange
+        )

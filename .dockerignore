@@ -1,1 +1,5 @@
 input/*
+assets/*
+catboost_info/*
+hydra_output/*
+wandb/*
