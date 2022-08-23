@@ -15,7 +15,7 @@ prep:
   svd_n_components: 15
 
 lgb:
-  num_iteration: 5000
+  num_iteration: 6000
   objective: binary
   metric: None
   boosting: dart
@@ -47,4 +47,4 @@ train:
 inference:
   chunk_size: 25
 
-debug: True
+debug: False

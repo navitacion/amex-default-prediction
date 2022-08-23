@@ -83,13 +83,13 @@ def floorify_random_noise_d(x: pd.DataFrame):
 
     x["D_63"] = (
         x["D_63"]
-        .apply(lambda t: {"CR": 0, "XZ": 1, "XM": 2, "CO": 3, "CL": 4, "XL": 5}[t])
+        .apply(lambda t: {"CR": 1, "XZ": 2, "XM": 3, "CO": 4, "CL": 5, "XL": 6}[t])
         .astype(np.int8)
     )
     x["D_64"] = x["D_64"].fillna("NULL")
     x["D_64"] = (
         x["D_64"]
-        .apply(lambda t: {"NULL": -1, "O": 0, "-1": 1, "R": 2, "U": 3}[t])
+        .apply(lambda t: {"NULL": 1, "O": 2, "-1": 3, "R": 4, "U": 5}[t])
         .astype(np.int8)
     )
 

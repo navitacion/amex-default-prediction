@@ -49,13 +49,14 @@ class CBModel(BaseModel):
     ) -> pd.DataFrame:
         self.model = None
         self.features = features
-        self.cat_features = cat_features
+        # TODO: Set Categorical Features
+        self.cat_features = None
 
         train_data = Pool(x_train, y_train, cat_features=self.cat_features)
         val_data = Pool(x_val, y_val, cat_features=self.cat_features)
 
         self.model = CatBoostClassifier(**self.params)
-        self.model.fit(train_data, eval_set=val_data, verbose=100)
+        self.model.fit(train_data, eval_set=val_data, verbose=500)
 
         oof = self.model.predict(x_val, prediction_type="Probability")[:, 1]
 

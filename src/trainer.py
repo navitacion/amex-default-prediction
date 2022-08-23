@@ -45,7 +45,7 @@ class Trainer:
                 f for f in df.columns if f not in [self.id_col, self.tar_col]
             ]
 
-        self.cat_features = [
+        self.cat_features_name = [
             c
             for c in df[self.features]
             .select_dtypes(include=["object", "category"])
@@ -93,7 +93,7 @@ class Trainer:
                 x_val=data[val_idx],
                 y_val=label[val_idx],
                 features=self.features,
-                cat_features=self.cat_features,
+                cat_features=self.cat_features_name,
             )
 
             # Score
