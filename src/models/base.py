@@ -7,7 +7,7 @@ class BaseModel(metaclass=ABCMeta):
         self.params = params
 
     @abstractmethod
-    def train(self, x_train, y_train, x_val, y_val, features):
+    def train(self, x_train, y_train, x_val, y_val, features, cat_features):
         raise NotImplementedError
 
     @abstractmethod
