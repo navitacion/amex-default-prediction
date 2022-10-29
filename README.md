@@ -11,8 +11,8 @@ https://www.kaggle.com/competitions/amex-default-prediction
 
 ## Result
 
-- Private Score: 0.805
-- Rank: 2020th / 4937 (41%)
+- Private Score: 0.80563
+- Rank: 1979th / 4874 (41%)
 
 ## Getting Started
 
